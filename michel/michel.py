@@ -5,22 +5,23 @@ michel-orgmode -- a script to push/pull an org-mode text file to/from a google
                   tasks list.
 
 """
-from __future__ import with_statement
-import gflags
+
 import httplib2
-from apiclient.discovery import build
-from oauth2client.file import Storage
-from oauth2client.client import OAuth2WebServerFlow
-from oauth2client.tools import run
-from xdg.BaseDirectory import save_data_path #, save_config_path 
+
+from apiclient import discovery
+import oauth2client
+from oauth2client import client
+from oauth2client import tools
+
+import codecs
 import argparse
 import os.path
 import shutil
 import sys
 import re
-import cPickle as pickle
-import cStringIO
 import diff3
+import pickle as pickle
+import io
 
 class TasksTree(object):
     """
@@ -77,35 +78,9 @@ class TasksTree(object):
                 TasksTree(title, task_id, task_notes, task_status))
         else:
             if self.get_task_with_id(parent_id) is None:
-                raise ValueError, "No element with suitable parent id"
+                raise ValueError("No element with suitable parent id")
             self.get_task_with_id(parent_id).add_subtask(title, task_id, None,
                     task_notes, task_status)
-
-    def add_subtree(self, tree_to_add, include_root=False, root_title=None,
-            root_notes=None):
-        """Add *tree_to_add* as a subtree of this tree.
-        
-        If *include_root* is False, then the children of *tree_to_add* will be
-        added as children of this tree's root node.  Otherwise, the root node
-        of *tree_to_add* will be added as a child of this tree's root node.
-        
-        The *root_title* and *root_notes* arguments are optional, and can be
-        used to set the title and notes of *tree_to_add*'s root node when
-        *include_root* is True. 
-        
-        """
-        if not include_root:
-            self.subtasks.extend(tree_to_add.subtasks)
-        else:
-            if root_title is not None:
-                tree_to_add.title = root_title
-            if tree_to_add.title is None:
-                tree_to_add.title = ""
-                
-            if root_notes is not None:
-                tree_to_add.notes = root_notes
-            
-            self.subtasks.append(tree_to_add)
 
     def last_task_node_at_level(self, level):
         """Return the last task added at a given level of the tree.
@@ -156,9 +131,9 @@ class TasksTree(object):
             #indentations = '\t' * level
             # add number of asterisks corresponding to depth of task, followed
             # by "DONE" if the task is marked as completed.
-            done_string = u""
+            done_string = ""
             if (subtask.status is not None) and (subtask.status == "completed"):
-                done_string = u" DONE"
+                done_string = " DONE"
             indentations = '*' * (level+1) + done_string + " "
             res.append(indentations + subtask.title)
             if subtask.notes is not None:
@@ -182,15 +157,21 @@ class TasksTree(object):
         """
         # always add a trailing "\n" because text-files normally include a "\n"
         # at the end of the last line of the file.
-        return u'\n'.join(self._lines(0)) + u"\n"
+        return '\n'.join(self._lines(0)) + "\n"
 
     def _print(self):
-        print(self.__str__().encode('utf-8'))
+        print(self.__str__())
 
     def write_to_orgfile(self, fname):
-        f = open(fname, 'wb')
-        f.write(self.__str__().encode('utf-8'))
+        f = codecs.open(fname, "w", "utf-8")
+        f.write(self.__str__())
         f.close()
+
+def save_data_path(file_name):
+    data_path = os.path.join(os.path.expanduser('~'), ".michel")
+    if not os.path.exists(data_path):
+        os.makedirs(data_path)
+    return os.path.join(data_path, file_name)
 
 def database_read(key):
     """Fetch an object from the persistent database stored under *key*.
@@ -199,7 +180,7 @@ def database_read(key):
     using *key*.  If no such key exists, None is returned.
     
     """
-    db_path = os.path.join(save_data_path("michel"), "config_data.pkl")
+    db_path = save_data_path("config_data.pkl")
     try:
         with open(db_path, "rb") as db_file:
             db_dict = pickle.load(db_file)
@@ -212,7 +193,7 @@ def database_read(key):
 
 def database_write(key, obj):
     "Store an arbitrary object *obj* in the persistent database under *key*."
-    db_path = os.path.join(save_data_path("michel"), "config_data.pkl")
+    db_path = save_data_path("config_data.pkl")
     try:
         with open(db_path, "rb") as db_file:
             db_dict = pickle.load(db_file)
@@ -224,7 +205,7 @@ def database_write(key, obj):
 
 def database_delete(key):
     "Delete the object in the persistent database stored under *key*."
-    db_path = os.path.join(save_data_path("michel"), "config_data.pkl")
+    db_path = save_data_path("config_data.pkl")
     try:
         with open(db_path, "rb") as db_file:
             db_dict = pickle.load(db_file)
@@ -272,21 +253,19 @@ def get_service(profile_name):
     Yes I do publish a secret key here, apparently it is normal
     http://stackoverflow.com/questions/7274554/why-google-native-oauth2-flow-require-client-secret
     """
-    FLAGS = gflags.FLAGS
-    FLOW = OAuth2WebServerFlow(
+    storage = oauth2client.file.Storage(save_data_path("oauth.dat"))
+    credentials = storage.get()
+    if not credentials or credentials.invalid:
+        flow = client.OAuth2WebServerFlow(
             client_id='617841371351.apps.googleusercontent.com',
             client_secret='_HVmphe0rqwxqSR8523M6g_g',
             scope='https://www.googleapis.com/auth/tasks',
             user_agent='michel/0.0.1')
-    FLAGS.auth_local_webserver = False
-    auth_filename = profile_name + "_oauth.dat"
-    storage = Storage(os.path.join(save_data_path("michel"), auth_filename))
-    credentials = storage.get()
-    if credentials is None or credentials.invalid == True:
-        credentials = run(FLOW, storage)
+        flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args("")
+        credentials = tools.run_flow(flow, storage, flags)
     http = httplib2.Http()
     http = credentials.authorize(http)
-    return build(serviceName='tasks', version='v1', http=http)
+    return discovery.build(serviceName='tasks', version='v1', http=http)
 
 def get_list_id(service, list_name=None):
     if list_name is None:
@@ -300,7 +279,7 @@ def get_list_id(service, list_name=None):
                 break
         else:
             # no list with the given name was found
-            print '\nERROR: No google task-list named "%s"\n' % list_name
+            print('\nERROR: No google task-list named "%s"\n' % list_name)
             sys.exit(2)
 
     return list_id
@@ -378,14 +357,14 @@ def erase_todolist(profile, list_id):
 
 def parse_path(path):
     """Parses an org-mode file and returns a tree"""
-    file_lines = open(path, "r").readlines()
+    file_lines = codecs.open(path, "r", "utf-8").readlines()
     file_text = "".join(file_lines)
     return parse_text_to_tree(file_text)
     
 def parse_text_to_tree(text):
     """Parses an org-mode formatted block of text and returns a tree"""
     # create a (read-only) file object containing *text*
-    f = cStringIO.StringIO(text)
+    f = io.StringIO(text)
     
     headline_regex = re.compile("^(\*+ )( *)(DONE )?")
     tasks_tree = TasksTree()
@@ -536,12 +515,12 @@ def sync_todolist(path, profile, list_name):
         merged_tree.push(service, list_id)
         
         # write merged tree to orgfile
-        open(path, 'wb').write(str(merged_tree))
+        codecs.open(path, "w", "utf-8").write(str(merged_tree))
 
 
 def main():
     parser = argparse.ArgumentParser(description="Synchronize org-mode text" 
-                                           "files with a google-tasks list.")
+                                     "files with a google-tasks list.")
     
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--push", action='store_true',
