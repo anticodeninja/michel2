@@ -13,15 +13,19 @@ import oauth2client
 from oauth2client import client
 from oauth2client import tools
 
+from difflib import SequenceMatcher
 import codecs
 import argparse
 import os.path
 import shutil
 import sys
 import re
-import diff3
-import pickle as pickle
 import io
+import ipdb
+
+RATIO_THRESHOLD = 0.8
+headline_regex = re.compile("^(\*+) *(DONE|TODO)? *(.*)")
+spec_re = re.compile("([^.]+): (.+)")
 
 class TasksTree(object):
     """
@@ -34,13 +38,13 @@ class TasksTree(object):
     - may have a title
     """
 
-    def __init__(self, title=None, task_id=None, task_notes=None, task_status=None):
+    def __init__(self, title=None, task_id=None, task_notes=None, task_todo=False, task_completed=False):
         self.title = title
         self.task_id = task_id
         self.subtasks = []
-        self.notes = task_notes
-        # *status* usually takes on the value 'completed' or 'needsAction'
-        self.status = task_status
+        self.notes = task_notes or []
+        self.todo = task_todo
+        self.completed = task_completed
         
     def __getitem__(self, key):
         return self.subtasks[key]
@@ -67,20 +71,48 @@ class TasksTree(object):
             return None
 
     def add_subtask(self, title, task_id = None, parent_id = None,
-            task_notes=None, task_status=None):
+                    task_notes = None, task_todo = False, task_completed = False):
         """
         Adds a subtask to the tree
         - with the specified task_id
         - as a child of parent_id
         """
         if parent_id is None:
-            self.subtasks.append(
-                TasksTree(title, task_id, task_notes, task_status))
+            task = TasksTree(title, task_id, task_notes, task_todo, task_completed)
+            self.subtasks.append(task)
+            return task
         else:
             if self.get_task_with_id(parent_id) is None:
                 raise ValueError("No element with suitable parent id")
-            self.get_task_with_id(parent_id).add_subtask(title, task_id, None,
-                    task_notes, task_status)
+            
+            return self.get_task_with_id(parent_id).add_subtask(title, task_id, None,
+                                                         task_notes, task_todo, task_completed)
+
+    def add_subtree(self, tree_to_add, include_root=False, root_title=None,
+            root_notes=None):
+        """Add *tree_to_add* as a subtree of this tree.
+        
+        If *include_root* is False, then the children of *tree_to_add* will be
+        added as children of this tree's root node.  Otherwise, the root node
+        of *tree_to_add* will be added as a child of this tree's root node.
+        
+        The *root_title* and *root_notes* arguments are optional, and can be
+        used to set the title and notes of *tree_to_add*'s root node when
+        *include_root* is True. 
+        
+        """
+        if not include_root:
+            self.subtasks.extend(tree_to_add.subtasks)
+        else:
+            if root_title is not None:
+                tree_to_add.title = root_title
+            if tree_to_add.title is None:
+                tree_to_add.title = ""
+                
+            if root_notes is not None:
+                tree_to_add.notes = root_notes
+            
+            self.subtasks.append(tree_to_add)
 
     def last_task_node_at_level(self, level):
         """Return the last task added at a given level of the tree.
@@ -109,13 +141,14 @@ class TasksTree(object):
         """Pushes the task tree to the given list"""
         # We do not want to push the root node
         if not root:
-            insert_cmd_args = {'tasklist': list_id,
-                               'body': {
-                                           'title': self.title,
-                                           'notes': self.notes,
-                                           'status': self.status
-                                       }
-                              }
+            insert_cmd_args = {
+                'tasklist': list_id,
+                'body': {
+                    'title': self.title,
+                    'notes': '\n'.join(self.notes),
+                    'status': 'completed' if self.completed else 'needsAction'
+                }
+            }
             if parent:
                 insert_cmd_args['parent'] = parent
             res = service.tasks().insert(**insert_cmd_args).execute()
@@ -127,24 +160,26 @@ class TasksTree(object):
     def _lines(self, level):
         """Returns the sequence of lines of the string representation"""
         res = []
+        
         for subtask in self.subtasks:
-            #indentations = '\t' * level
-            # add number of asterisks corresponding to depth of task, followed
-            # by "DONE" if the task is marked as completed.
-            done_string = ""
-            if (subtask.status is not None) and (subtask.status == "completed"):
-                done_string = " DONE"
-            indentations = '*' * (level+1) + done_string + " "
-            res.append(indentations + subtask.title)
-            if subtask.notes is not None:
-                notes = subtask.notes
+            line = '*' * (level + 1) + ' '
+            if subtask.completed:
+                line += 'DONE '
+            elif subtask.todo:
+                line += 'TODO '
+            line += subtask.title
+                
+            res.append(line)
+
+            for note_line in subtask.notes:
                 # add initial space to lines starting w/'*', so that it isn't treated as a task
-                if notes.startswith("*"):
-                    notes = " " + notes
-                notes = notes.replace("\n*", "\n *")
-                res.append(notes)
-            subtasks_lines = subtask._lines(level + 1)
-            res += subtasks_lines
+                if note_line.startswith("*"):
+                    note_line = " " + note_line
+                note_line = ' ' * (level + 2) + note_line
+                res.append(note_line)
+                
+            res += subtask._lines(level + 1)
+            
         return res
 
 
@@ -172,52 +207,6 @@ def save_data_path(file_name):
     if not os.path.exists(data_path):
         os.makedirs(data_path)
     return os.path.join(data_path, file_name)
-
-def database_read(key):
-    """Fetch an object from the persistent database stored under *key*.
-    
-    Returns an object pulled out of the persistent database which was stored
-    using *key*.  If no such key exists, None is returned.
-    
-    """
-    db_path = save_data_path("config_data.pkl")
-    try:
-        with open(db_path, "rb") as db_file:
-            db_dict = pickle.load(db_file)
-    except IOError: # typically because file doesn't exist
-        db_dict = {}
-    
-    obj = db_dict.get(key)
-    
-    return obj
-
-def database_write(key, obj):
-    "Store an arbitrary object *obj* in the persistent database under *key*."
-    db_path = save_data_path("config_data.pkl")
-    try:
-        with open(db_path, "rb") as db_file:
-            db_dict = pickle.load(db_file)
-    except IOError: # typically because file doesn't exist
-        db_dict = {}
-    db_dict[key] = obj
-    with open(db_path, "wb") as db_file:
-        pickle.dump(db_dict, db_file, pickle.HIGHEST_PROTOCOL)
-
-def database_delete(key):
-    "Delete the object in the persistent database stored under *key*."
-    db_path = save_data_path("config_data.pkl")
-    try:
-        with open(db_path, "rb") as db_file:
-            db_dict = pickle.load(db_file)
-    except AttributeError: # typically because file doesn't exist
-        db_dict = {}
-    
-    try:
-        del(db_dict[key])
-        with open(db_path, "wb") as db_file:
-            pickle.dump(db_dict, db_file, pickle.HIGHEST_PROTOCOL)
-    except KeyError:
-        pass
     
 def concatenate_trees(t1, t2):
     """Combine tree *t1*'s children with tree *t2*'s children.
@@ -233,19 +222,166 @@ def concatenate_trees(t1, t2):
     joined_tree = TasksTree()
     joined_tree.add_subtree(t1)
     joined_tree.add_subtree(t2)
-    
-    return joined_tree
 
-def treemerge(new_tree, old_tree, other_tree):
-    old = str(old_tree)
-    other = str(other_tree)
-    new = str(new_tree)
-    merged_text, conflict_occurred = diff3.merge3_text(new, old, other)
+    return joined_tree
     
-    merged_tree = parse_text_to_tree(merged_text)
-    
-    return merged_tree, conflict_occurred
- 
+def treemerge(tree_org, tree_remote):
+    tasks_org = []
+    tasks_remote = []
+
+    disassemble_tree(tree_org, tasks_org)
+    disassemble_tree(tree_remote, tasks_remote)
+
+    tasks_org.sort(key=lambda node: node.hash_sum)
+    tasks_remote.sort(key=lambda node: node.hash_sum)
+
+    mapping = []
+
+    # first step, exact matching
+    index_org, index_remote = 0, 0
+    while index_org < len(tasks_org):
+        is_mapped = False
+        index_remote = 0
+        
+        while index_remote < len(tasks_remote):
+            if tasks_org[index_org].is_equal(tasks_remote[index_remote]):
+                mapping.append(tuple([tasks_org.pop(index_org), tasks_remote.pop(index_remote), True]))
+                is_mapped = True
+                break
+            else:
+                index_remote += 1
+
+        if not is_mapped:
+            index_org += 1
+
+    # second step, fuzzy matching
+    index_org, index_remote = 0, 0
+    while index_org < len(tasks_org):
+        index_remote = 0
+        best_index_remote = None
+        best_ratio = 0.0
+        
+        while index_remote < len(tasks_remote):
+            ratio = tasks_org[index_org].calc_ratio(tasks_remote[index_remote])
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_index_remote = index_remote
+            index_remote += 1
+
+        if best_index_remote is not None:
+            mapping.append(tuple([tasks_org.pop(index_org), tasks_remote.pop(best_index_remote), False]))
+        else:
+            index_org += 1
+
+    # third step, patching org tree
+    for map_entry in mapping:
+        diff_notes = []
+
+        # Merge attributes
+        if map_entry[1].task.todo == True and map_entry[0].task.todo != True:
+            map_entry[0].task.todo = True
+        if map_entry[1].task.completed == True and map_entry[0].task.completed != True:
+            map_entry[0].task.completed = True
+
+        # Merge contents
+        if map_entry[1].task.title != map_entry[0].task.title:
+            diff_notes.append("PREV_ORG_TITLE: {0}".format(map_entry[0].task.title))
+            map_entry[0].task.title = map_entry[1].task.title
+
+        if map_entry[1].task.notes != map_entry[0].task.notes:
+            for note_line in map_entry[1].task.notes:
+                matches = spec_re.findall(note_line)
+                if len(matches) > 0:
+                    if matches[0][0] == "PREV_ORG_TITLE":
+                        continue
+                    elif matches[0][0] == "REMOTE_APPEND_NOTE":
+                        note_line = matches[0][1]
+                    
+                if note_line not in map_entry[0].task.notes:
+                    diff_notes.append("REMOTE_APPEND_NOTE: {0}".format(note_line))
+
+        map_entry[0].task.notes += diff_notes
+
+    # fourth step, append new items
+    for i in range(len(tasks_remote)):
+        new_task = tasks_remote[i]
+
+        try:
+            parent_task = next(x for x in mapping if x[1] == new_task.parent)[0].task
+        except StopIteration:
+            parent_task = tree_org
+            new_task.task.notes.append("MERGE_INFO: parent is not exist")
+
+        created_task = parent_task.add_subtask(
+            title=new_task.task.title,
+            task_notes=new_task.task.notes,
+            task_todo=new_task.task.todo,
+            task_completed=new_task.task.completed)
+
+        mapping.append(tuple([PartTree(parent_task, created_task), new_task, True]))
+
+class PartTree:
+    def __init__(self, parent, task):
+        self.task = task
+        self.parent = parent
+        self.hash_sum = 0
+        self.title = task.title
+        
+        notes = []
+        for note_line in task.notes:
+            matches = spec_re.findall(note_line)
+            if len(matches) > 0:
+                if matches[0][0] == "PREV_ORG_TITLE":
+                    continue
+                elif matches[0][0] == "REMOTE_APPEND_NOTE":
+                    note_line = matches[0][1]
+            notes.append(note_line)
+        self.notes = " ".join(notes)
+
+        if self.title is not None:
+            for char in self.title:
+                self.hash_sum += ord(char)
+        for char in self.notes:
+            self.hash_sum += ord(char)
+
+    def is_equal(self, another):
+        return self.title == another.title and \
+            self.notes == another.notes
+
+    def calc_ratio(self, another):
+        return self.__calc_ratio(self.title, another.title) * 0.7 +\
+            self.__calc_ratio(" ".join(self.notes), " ".join(another.notes)) * 0.3
+
+    def __calc_ratio(self, str1, str2):
+        if len(str1) == 0 and len(str2) == 0:
+            return 1
+        
+        seq = SequenceMatcher(None, str1, str2)
+        ratio = 0
+        
+        for opcode in seq.get_opcodes():
+            if opcode[0] == 'equal' or opcode[0] == 'insert':
+                continue
+            if opcode[0] == 'delete':
+                ratio += opcode[2] - opcode[1]
+            if opcode[0] == 'replace':
+                ratio += max(opcode[4] - opcode[3], opcode[2] - opcode[1])
+        return 1 - ratio/max(len(str1), len(str2))
+
+    def __str__(self):
+        return "{0} {1}, p: {2}".format(self.task.title, self.hash_sum, self.parent)
+
+    def __repr__(self):
+        return str(self)
+
+def disassemble_tree(tree, disassemblies, parent = None):
+    current = PartTree(parent, tree)
+    disassemblies.append(current)
+
+    for i in range(len(tree)):
+        disassemble_tree(tree[i], disassemblies, current)
+        
+
 def get_service(profile_name):
     """
     Handle oauth's shit (copy-pasta from
@@ -318,8 +454,13 @@ def tasklist_to_tasktree(tasklist):
     while tasklist != [] and fail_count < 1000:
         t = tasklist.pop(0)
         try:
-            tasks_tree.add_subtask(t['title'], t['id'],
-                    t.get('parent'), t.get('notes'), t.get('status'))
+            tasks_tree.add_subtask(
+                title = t['title'],
+                task_id = t['id'],
+                parent_id = t.get('parent'),
+                task_notes = t.get('notes').split('\n') if t.get('notes') else None,
+                task_todo = True,
+                task_completed = t.get('status') == 'completed')
         except ValueError:
             fail_count += 1
             tasklist.append(t)
@@ -366,86 +507,28 @@ def parse_text_to_tree(text):
     # create a (read-only) file object containing *text*
     f = io.StringIO(text)
     
-    headline_regex = re.compile("^(\*+ )( *)(DONE )?")
     tasks_tree = TasksTree()
-    
-    indent_level = 0
-    last_indent_level = 0
-    seen_first_task = False
-    task_notes = None
-    task_title = None
-    for n, line in enumerate(f):
-        matches = headline_regex.findall(line)
-        line = line.rstrip("\n")
+    last_task = None
+
+    for line in f:
+        matches = headline_regex.findall(line.rstrip("\n"))
         try:
             # assign task_depth; root depth starts at 0
-            num_asterisks_and_space = len(matches[0][0])
+            indent_level = len(matches[0][0])
             
             # if we get to this point, then it means that a new task is
             # starting on this line -- we need to add the last-parsed task
             # to the tree (if this isn't the first task encountered)
             
-            if seen_first_task:
-                # add the task to the tree
-                tasks_tree.last_task_node_at_level(indent_level).add_subtask(
-                        title=task_title,
-                        task_notes=task_notes,
-                        task_status=task_status)
-            else:
-                if task_notes is not None:
-                    # this means there was some text at the beginning of the
-                    # file before any headline was encountered.  We create a
-                    # dummy headline to contain this text.
-                    tasks_tree.last_task_node_at_level(0).add_subtask(
-                            title="",
-                            task_notes=task_notes,
-                            task_status=None)
-                # this is the first task, so skip adding a last-task to the
-                # tree, and record that we've encountered our first task
-                seen_first_task = True
-            
-            indent_level = num_asterisks_and_space - 2
-            
-            # strip off asterisks-and-space prefix
-            line = line[num_asterisks_and_space:]
-            
-            if matches[0][2] == 'DONE ':
-                task_status = 'completed'
-                # number of spaces preceeding 'DONE' and after
-                # asterisks+single-space
-                num_extra_spaces = len(matches[0][1])
-                # remove the '[ ...]DONE ' from the line
-                line = line[num_extra_spaces + len('DONE '):]
-            else:
-                task_status = 'needsAction'
-            
-            task_title = line
-            task_notes = None
+            # add the task to the tree
+            last_task = tasks_tree.last_task_node_at_level(indent_level-1).add_subtask(
+                title=matches[0][2],
+                task_todo=matches[0][1] == 'DONE' or matches[0][1] == 'TODO',
+                task_completed=matches[0][1] == 'DONE')
+
         except IndexError:
             # this is not a task, but a task-notes line
-            if task_notes is None:
-                task_notes = line
-            else:
-                task_notes += "\n" + line
-        
-        assert indent_level <= last_indent_level + 1, ("line %d: "
-                "subtask has no parent task" % n)
-        last_indent_level = indent_level
-    # END: for loop
-    
-    # add the last task to the tree, since the for loop won't be iterated
-    # again after the last line of the file (tasks are added at beginning
-    # of the for loop)
-    if task_title is not None:
-        tasks_tree.last_task_node_at_level(indent_level).add_subtask(
-                title=task_title,
-                task_notes=task_notes,
-                task_status=task_status)
-    else: # there are no headlines in the org-file; create a dummy headline
-        tasks_tree.last_task_node_at_level(0).add_subtask(
-                title="",
-                task_notes=task_notes,
-                task_status=None)
+            last_task.notes.append(line.strip())
 
     f.close()
     return tasks_tree
@@ -458,64 +541,21 @@ def push_todolist(path, profile, list_name):
     erase_todolist(profile, list_id)
     tasks_tree.push(service, list_id)
 
-def store_current_tree(tree, profile, listname):
-    "Store the current tree persistently for later use"
-    if listname is None:
-        listname = "_DEFAULT_"
-    database_write(profile + "__" + listname + "_tree", tree)
-
-def get_last_tree(profile, listname):
-    if listname is None:
-        listname = "_DEFAULT_"
-    tree = database_read(profile + "__" + listname + "_tree")
-    return tree
-
 def sync_todolist(path, profile, list_name):
     """Synchronizes the specified file with the specified todolist"""
-    gtasks_tree = get_gtask_list_as_tasktree(profile, list_name)
-    orgfile_tree = parse_path(path)
-    orig_tree = get_last_tree(profile, list_name)
-    if orig_tree is None:
-        # by default keep the gtasks tree if no original tree is available --
-        # this requires setting the original tree to the orgfile tree.
-        orig_tree = orgfile_tree
-        
-        # save a local backup of the gtasks tree to avoid data-loss
-        bkup_fname = path + ".orig"
-        shutil.copyfile(path, bkup_fname)
-        
-        print ("\nWARNING: This is the first time syncing the '%s' list. "
-               "There is no way of knowing how best to merge the contents "
-               "of this list with the contents of the org-file.  Therefore, "
-               "'%s' has been updated to contain the contents of the "
-               "list, and a backup of this file has been created "
-               "as '%s'.  Please update '%s' as desired, and re-run "
-               "the synchronization.\n") % (list_name, path, bkup_fname, path)
+    tree_remote = get_gtask_list_as_tasktree(profile, list_name)
+    tree_org = parse_path(path)
     
-    merged_tree, conflict_occurred = treemerge(orgfile_tree, orig_tree, gtasks_tree)
+    treemerge(tree_org, tree_remote)
     
-    if conflict_occurred:
-        conflicted_filename = path + ".conflicted"
-        open(conflicted_filename, "wb").write(str(merged_tree))
-        print ("\nWARNING:  Org-file and task-list could not be cleanly merged:  "
-              "the attempted merge can be found in '%s'.  Please "
-              "modify this file, copy it to '%s', and push '%s' back "
-              "to the desired GTasks list.\n") % (conflicted_filename, path, path)
-        sys.exit(2)
-    else:
-        # store the successfully merged tree locally so we can use it as the
-        # original/base tree in future 3-way merges.
-        # TODO: do this also when pushing/pulling?
-        store_current_tree(merged_tree, profile, list_name)
+    # write merged tree to tasklist
+    service = get_service(profile)
+    list_id = get_list_id(service, list_name)
+    erase_todolist(profile, list_id)
+    tree_org.push(service, list_id)
         
-        # write merged tree to tasklist
-        service = get_service(profile)
-        list_id = get_list_id(service, list_name)
-        erase_todolist(profile, list_id)
-        merged_tree.push(service, list_id)
-        
-        # write merged tree to orgfile
-        codecs.open(path, "w", "utf-8").write(str(merged_tree))
+    # write merged tree to orgfile
+    codecs.open(path, "w", "utf-8").write(str(tree_org))
 
 
 def main():
