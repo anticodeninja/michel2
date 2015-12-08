@@ -154,6 +154,8 @@ class TestMichel(unittest.TestCase):
             ** Headline B1.1
                Remote append B1.1 body text.
             * Headline B2
+            * TODO Headline C
+            * TODO Headline D
             """)
         remote_text = textwrap.dedent("""\
             * Headline A1
@@ -165,6 +167,9 @@ class TestMichel(unittest.TestCase):
             ** Headline A2.1
             * Headline B2 modified
               New B2 body text.
+            * TODO Headline D
+              PREV_ORG_TITLE: Headline C
+            * TODO Headline D
             """)
         result_text = textwrap.dedent("""\
             * Headline A1
@@ -177,11 +182,16 @@ class TestMichel(unittest.TestCase):
             * Headline B2 modified
               PREV_ORG_TITLE: Headline B2
               REMOTE_APPEND_NOTE: New B2 body text.
+            * TODO Headline C
+            * TODO Headline D
             """)
         
         org_tree = m.parse_text_to_tree(org_text)
         remote_tree = m.parse_text_to_tree(remote_text)
         m.treemerge(org_tree, remote_tree)
+
+        print(result_text)
+        print(str(org_tree))
         
         self.assertEqual(str(org_tree), result_text)
 

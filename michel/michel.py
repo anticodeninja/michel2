@@ -23,7 +23,7 @@ import re
 import io
 import ipdb
 
-RATIO_THRESHOLD = 0.8
+RATIO_THRESHOLD = 0.85
 headline_regex = re.compile("^(\*+) *(DONE|TODO)? *(.*)")
 spec_re = re.compile("([^.]+): (.+)")
 
@@ -238,58 +238,59 @@ def treemerge(tree_org, tree_remote):
     mapping = []
 
     # first step, exact matching
-    index_org, index_remote = 0, 0
-    while index_org < len(tasks_org):
+    index_remote, index_org = 0, 0
+    while index_remote < len(tasks_remote):
         is_mapped = False
-        index_remote = 0
+        index_org = 0
         
-        while index_remote < len(tasks_remote):
-            if tasks_org[index_org].is_equal(tasks_remote[index_remote]):
-                mapping.append(tuple([tasks_org.pop(index_org), tasks_remote.pop(index_remote), True]))
+        while index_org < len(tasks_org):
+            if tasks_remote[index_remote].is_equal(tasks_org[index_org]):
+                mapping.append(tuple([tasks_remote.pop(index_remote), tasks_org.pop(index_org), True]))
                 is_mapped = True
                 break
             else:
-                index_remote += 1
+                index_org += 1
 
         if not is_mapped:
-            index_org += 1
+            index_remote += 1
 
     # second step, fuzzy matching
-    index_org, index_remote = 0, 0
-    while index_org < len(tasks_org):
-        index_remote = 0
-        best_index_remote = None
-        best_ratio = 0.0
+    index_remote, index_org = 0, 0
+    while index_remote < len(tasks_remote):
+        index_org = 0
+        best_index_org = None
+        best_ratio = RATIO_THRESHOLD
         
-        while index_remote < len(tasks_remote):
+        while index_org < len(tasks_org):
             ratio = tasks_org[index_org].calc_ratio(tasks_remote[index_remote])
             if ratio > best_ratio:
                 best_ratio = ratio
-                best_index_remote = index_remote
-            index_remote += 1
-
-        if best_index_remote is not None:
-            mapping.append(tuple([tasks_org.pop(index_org), tasks_remote.pop(best_index_remote), False]))
-        else:
+                best_index_org = index_org
             index_org += 1
+
+        if best_index_org is not None:
+            mapping.append(tuple([tasks_remote.pop(index_remote), tasks_org.pop(best_index_org), False]))
+        else:
+            index_remote += 1
 
     # third step, patching org tree
     for map_entry in mapping:
         diff_notes = []
 
         # Merge attributes
-        if map_entry[1].task.todo == True and map_entry[0].task.todo != True:
-            map_entry[0].task.todo = True
-        if map_entry[1].task.completed == True and map_entry[0].task.completed != True:
-            map_entry[0].task.completed = True
+        if map_entry[0].task.todo == True and map_entry[1].task.todo != True:
+            map_entry[1].task.todo = True
+        if map_entry[0].task.completed == True and map_entry[1].task.completed != True:
+            map_entry[1].task.completed = True
 
         # Merge contents
-        if map_entry[1].task.title != map_entry[0].task.title:
-            diff_notes.append("PREV_ORG_TITLE: {0}".format(map_entry[0].task.title))
-            map_entry[0].task.title = map_entry[1].task.title
+        if map_entry[0].task.title != map_entry[1].task.title:
+            if map_entry[1].task.title not in map_entry[0].titles:
+                diff_notes.append("PREV_ORG_TITLE: {0}".format(map_entry[1].task.title))
+                map_entry[1].task.title = map_entry[0].task.title
 
-        if map_entry[1].task.notes != map_entry[0].task.notes:
-            for note_line in map_entry[1].task.notes:
+        if map_entry[0].task.notes != map_entry[1].task.notes:
+            for note_line in map_entry[0].task.notes:
                 matches = spec_re.findall(note_line)
                 if len(matches) > 0:
                     if matches[0][0] == "PREV_ORG_TITLE":
@@ -297,17 +298,17 @@ def treemerge(tree_org, tree_remote):
                     elif matches[0][0] == "REMOTE_APPEND_NOTE":
                         note_line = matches[0][1]
                     
-                if note_line not in map_entry[0].task.notes:
+                if note_line not in map_entry[1].task.notes:
                     diff_notes.append("REMOTE_APPEND_NOTE: {0}".format(note_line))
 
-        map_entry[0].task.notes += diff_notes
+        map_entry[1].task.notes += diff_notes
 
     # fourth step, append new items
     for i in range(len(tasks_remote)):
         new_task = tasks_remote[i]
 
         try:
-            parent_task = next(x for x in mapping if x[1] == new_task.parent)[0].task
+            parent_task = next(x for x in mapping if x[0] == new_task.parent)[1].task
         except StopIteration:
             parent_task = tree_org
             new_task.task.notes.append("MERGE_INFO: parent is not exist")
@@ -325,32 +326,39 @@ class PartTree:
         self.task = task
         self.parent = parent
         self.hash_sum = 0
-        self.title = task.title
+        self.titles = []
+
+        if task.title is not None:
+            self.titles.append(task.title)
         
         notes = []
         for note_line in task.notes:
             matches = spec_re.findall(note_line)
             if len(matches) > 0:
                 if matches[0][0] == "PREV_ORG_TITLE":
+                    if matches[0][1] not in self.titles:
+                        self.titles.append(matches[0][1])
                     continue
                 elif matches[0][0] == "REMOTE_APPEND_NOTE":
                     note_line = matches[0][1]
             notes.append(note_line)
         self.notes = " ".join(notes)
 
-        if self.title is not None:
-            for char in self.title:
+        for title in self.titles:
+            for char in title:
                 self.hash_sum += ord(char)
         for char in self.notes:
             self.hash_sum += ord(char)
 
     def is_equal(self, another):
-        return self.title == another.title and \
-            self.notes == another.notes
+        if len(self.titles) == 0 and len(another.titles) == 0:
+            return True
+        
+        return any(a == b for a in self.titles for b in another.titles) and self.notes == another.notes
 
     def calc_ratio(self, another):
-        return self.__calc_ratio(self.title, another.title) * 0.7 +\
-            self.__calc_ratio(" ".join(self.notes), " ".join(another.notes)) * 0.3
+        return max(self.__calc_ratio(a, b) for a in self.titles for b in another.titles) * 0.7 +\
+            self.__calc_ratio(self.notes, another.notes) * 0.3
 
     def __calc_ratio(self, str1, str2):
         if len(str1) == 0 and len(str2) == 0:
