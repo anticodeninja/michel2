@@ -88,32 +88,6 @@ class TasksTree(object):
             return self.get_task_with_id(parent_id).add_subtask(title, task_id, None,
                                                          task_notes, task_todo, task_completed)
 
-    def add_subtree(self, tree_to_add, include_root=False, root_title=None,
-            root_notes=None):
-        """Add *tree_to_add* as a subtree of this tree.
-        
-        If *include_root* is False, then the children of *tree_to_add* will be
-        added as children of this tree's root node.  Otherwise, the root node
-        of *tree_to_add* will be added as a child of this tree's root node.
-        
-        The *root_title* and *root_notes* arguments are optional, and can be
-        used to set the title and notes of *tree_to_add*'s root node when
-        *include_root* is True. 
-        
-        """
-        if not include_root:
-            self.subtasks.extend(tree_to_add.subtasks)
-        else:
-            if root_title is not None:
-                tree_to_add.title = root_title
-            if tree_to_add.title is None:
-                tree_to_add.title = ""
-                
-            if root_notes is not None:
-                tree_to_add.notes = root_notes
-            
-            self.subtasks.append(tree_to_add)
-
     def last_task_node_at_level(self, level):
         """Return the last task added at a given level of the tree.
         
@@ -207,24 +181,7 @@ def save_data_path(file_name):
     if not os.path.exists(data_path):
         os.makedirs(data_path)
     return os.path.join(data_path, file_name)
-    
-def concatenate_trees(t1, t2):
-    """Combine tree *t1*'s children with tree *t2*'s children.
-    
-    A tree is returned whose children include the children of *t1* and the
-    children of *t2*.  The root node of the returned tree is a dummy node
-    having no title.
-    
-    Note: children are treated as references, so modifying *t1* after creating
-    the combined tree will also modify the combined tree.
-    
-    """
-    joined_tree = TasksTree()
-    joined_tree.add_subtree(t1)
-    joined_tree.add_subtree(t2)
-
-    return joined_tree
-    
+        
 def treemerge(tree_org, tree_remote):
     tasks_org = []
     tasks_remote = []
@@ -293,10 +250,9 @@ def treemerge(tree_org, tree_remote):
             for note_line in map_entry[0].task.notes:
                 matches = spec_re.findall(note_line)
                 if len(matches) > 0:
-                    if matches[0][0] == "PREV_ORG_TITLE":
+                    if matches[0][0] == "PREV_ORG_TITLE" or \
+                       matches[0][0] == "REMOTE_APPEND_NOTE":
                         continue
-                    elif matches[0][0] == "REMOTE_APPEND_NOTE":
-                        note_line = matches[0][1]
                     
                 if note_line not in map_entry[1].task.notes:
                     diff_notes.append("REMOTE_APPEND_NOTE: {0}".format(note_line))
@@ -524,10 +480,6 @@ def parse_text_to_tree(text):
             # assign task_depth; root depth starts at 0
             indent_level = len(matches[0][0])
             
-            # if we get to this point, then it means that a new task is
-            # starting on this line -- we need to add the last-parsed task
-            # to the tree (if this isn't the first task encountered)
-            
             # add the task to the tree
             last_task = tasks_tree.last_task_node_at_level(indent_level-1).add_subtask(
                 title=matches[0][2],
@@ -535,6 +487,9 @@ def parse_text_to_tree(text):
                 task_completed=matches[0][1] == 'DONE')
 
         except IndexError:
+            if last_task is None:
+                raise ValueError("Text without task is not permitted")
+            
             # this is not a task, but a task-notes line
             last_task.notes.append(line.strip())
 

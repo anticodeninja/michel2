@@ -11,8 +11,7 @@ import tempfile
 import michel.michel as m
 
 class TestMichel(unittest.TestCase):
-    def setUp(self):
-        pass
+
     def test_text_to_tasktree(self):
         # text should have trailing "\n" character, like most textfiles
         org_text = textwrap.dedent("""\
@@ -22,20 +21,31 @@ class TestMichel(unittest.TestCase):
             * DONE    Headline 2
             ** Headline 2.1
             """)
+        result_text = textwrap.dedent("""\
+            * Headline 1
+              Body 1a
+              Body 1b
+            * DONE Headline 2
+            ** Headline 2.1
+            """)
         tasktree = m.parse_text_to_tree(org_text)
-        self.assertEqual(str(tasktree), org_text)
+        self.assertEqual(str(tasktree), result_text)
 
     def test_unicode_print(self):
         """
         Test ability to print unicode text
         """
+
+        if os.name == 'nt':
+            return
+        
         unicode_task = {
-            u'status': u'needsAction',
-            u'kind': u'tasks#task',
-            u'title': u'السلام عليكم',
-            u'notes': u'viele Grüße',
-            u'id': u'ABC123',
-            }
+            'status': 'needsAction',
+            'kind': 'tasks#task',
+            'title': 'السلام عليكم',
+            'notes': 'viele Grüße',
+            'id': 'ABC123',
+        }
         tasks_tree = m.tasklist_to_tasktree([unicode_task])
 
         old_stdout = sys.stdout
@@ -51,17 +61,19 @@ class TestMichel(unittest.TestCase):
         Test ability to pull unicode text into orgfile
         """
         unicode_task = {
-            u'status': u'needsAction',
-            u'kind': u'tasks#task',
-            u'title': u'السلام عليكم',
-            u'notes': u'viele Grüße',
-            u'id': u'ABC123',
-            }
+            'status': 'needsAction',
+            'kind': 'tasks#task',
+            'title': 'السلام عليكم',
+            'notes': 'viele Grüße',
+            'id': 'ABC123',
+        }
         tasks_tree = m.tasklist_to_tasktree([unicode_task])
 
-        fname = tempfile.NamedTemporaryFile().name
+        with tempfile.NamedTemporaryFile() as temp_file:
+            temp_file_name = temp_file.name
+            
         try:
-            tasks_tree.write_to_orgfile(fname)
+            tasks_tree.write_to_orgfile(temp_file_name)
         except UnicodeDecodeError:
             self.fail("TasksTree.write_to_orgfile() raised UnicodeDecodeError")
 
@@ -83,9 +95,7 @@ class TestMichel(unittest.TestCase):
             ** Headline 2.1
             """)
 
-        tasktree = m.parse_text_to_tree(org_text)
-        # a dummy headline will be added to contain the initial text
-        self.assertEqual(str(tasktree), "* \n" + org_text)
+        self.assertRaises(ValueError, m.parse_text_to_tree, org_text)
 
     def test_no_headlines(self):
         """
@@ -93,59 +103,19 @@ class TestMichel(unittest.TestCase):
         
         """
         # text should have trailing "\n" character, like most textfiles
-        org_text1 = textwrap.dedent("""\
+        org_text = textwrap.dedent("""\
 
             Some non-headline text...
             Another line of it.
             """)
-        org_text2 = "" # empty file
 
-        for org_text in [org_text1, org_text2]:
-            tasktree = m.parse_text_to_tree(org_text)
-            # a dummy headline will be added to contain the initial text
-            self.assertEqual(str(tasktree), "* \n" + org_text)
+        self.assertRaises(ValueError, m.parse_text_to_tree, org_text)
 
-    def test_add_subtrees(self):
-        org_text1 = textwrap.dedent("""\
-            * Headline A1
-            * Headline A2
-            ** Headline A2.1
-            """)
-        org_text2 = textwrap.dedent("""\
-            * Headline B1
-            ** Headline B1.1
-            * Headline B2
-            """)
-        tree1 = m.parse_text_to_tree(org_text1)
-        tree2 = m.parse_text_to_tree(org_text2)
+    def test_empty_file(self):
+        org_text = "" # empty file
+        m.parse_text_to_tree(org_text)
         
-        # test tree concatenation
-        target_tree = m.concatenate_trees(tree1, tree2)
-        target_text = textwrap.dedent("""\
-            * Headline A1
-            * Headline A2
-            ** Headline A2.1
-            * Headline B1
-            ** Headline B1.1
-            * Headline B2
-            """)
-        self.assertEqual(str(target_tree), target_text)
-        
-        # test subtree grafting
-        # add tree2's children to first child of tree1
-        tree1[0].add_subtree(tree2)
-        target_tree = tree1
-        target_text = textwrap.dedent("""\
-            * Headline A1
-            ** Headline B1
-            *** Headline B1.1
-            ** Headline B2
-            * Headline A2
-            ** Headline A2.1
-            """)
-        self.assertEqual(str(target_tree), target_text)
-        
-    def test_merge(self):
+    def test_safemerge(self):
         org_text = textwrap.dedent("""\
             * Headline A1
             * Headline A2
@@ -154,22 +124,17 @@ class TestMichel(unittest.TestCase):
             ** Headline B1.1
                Remote append B1.1 body text.
             * Headline B2
-            * TODO Headline C
-            * TODO Headline D
             """)
         remote_text = textwrap.dedent("""\
             * Headline A1
             ** Headline A1.1
             * Headline B1
             ** Headline B1.1
-               REMOTE_APPEND_NOTE: Remote append B1.1 body text.
+               Remote append B1.1 body text.
             * Headline A2
             ** Headline A2.1
             * Headline B2 modified
               New B2 body text.
-            * TODO Headline D
-              PREV_ORG_TITLE: Headline C
-            * TODO Headline D
             """)
         result_text = textwrap.dedent("""\
             * Headline A1
@@ -182,16 +147,57 @@ class TestMichel(unittest.TestCase):
             * Headline B2 modified
               PREV_ORG_TITLE: Headline B2
               REMOTE_APPEND_NOTE: New B2 body text.
-            * TODO Headline C
-            * TODO Headline D
             """)
         
         org_tree = m.parse_text_to_tree(org_text)
         remote_tree = m.parse_text_to_tree(remote_text)
         m.treemerge(org_tree, remote_tree)
+        
+        self.assertEqual(str(org_tree), result_text)
 
-        print(result_text)
-        print(str(org_tree))
+    def test_remerge_with_fixes(self):
+        org_text = textwrap.dedent("""\
+            * Headline A1
+              Original text.
+            * TODO Headline B
+            * TODO Headline C
+            """)
+        remote_text = textwrap.dedent("""\
+            * Headline A1
+              Original text.
+              REMOTE_APPEND_NOTE: Text which should be ignored
+            * TODO Headline C
+              PREV_ORG_TITLE: Headline B
+            * TODO Headline C
+            """)
+        result_text = textwrap.dedent("""\
+            * Headline A1
+              Original text.
+            * TODO Headline B
+            * TODO Headline C
+            """)
+        
+        org_tree = m.parse_text_to_tree(org_text)
+        remote_tree = m.parse_text_to_tree(remote_text)
+        m.treemerge(org_tree, remote_tree)
+        
+        self.assertEqual(str(org_tree), result_text)
+
+    def test_remerge_without_fixes(self):
+        remote_text = textwrap.dedent("""\
+            * Headline A1
+              Original text.
+              REMOTE_APPEND_NOTE: Text which should be ignored
+            * TODO Headline C
+              PREV_ORG_TITLE: Headline B
+            * TODO Headline C
+            """)
+        org_text = remote_text
+        result_text = remote_text
+        
+        org_tree = m.parse_text_to_tree(org_text)
+        remote_tree = m.parse_text_to_tree(remote_text)
+        m.treemerge(org_tree, remote_tree)
         
         self.assertEqual(str(org_tree), result_text)
 
