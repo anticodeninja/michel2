@@ -111,10 +111,10 @@ class TasksTree(object):
             if res is not None:
                 return res
 
-    def push(self, service, list_id, parent = None, root=True):
+    def push(self, service, list_id, only_todo, parent = None, root=True):
         """Pushes the task tree to the given list"""
         # We do not want to push the root node
-        if not root:
+        if not root and (not only_todo or (self.todo and not self.completed)):
             insert_cmd_args = {
                 'tasklist': list_id,
                 'body': {
@@ -129,7 +129,17 @@ class TasksTree(object):
             self.task_id = res['id']
         # the API head inserts, so we insert in reverse.
         for subtask in reversed(self.subtasks):
-            subtask.push(service, list_id, parent=self.task_id, root=False)
+            subtask.push(service, list_id, only_todo, parent=self.task_id, root=False)
+
+    def normalize_todo(self):
+        for subtask in self.subtasks:
+            subtask_todo, subtask_completed = subtask.normalize_todo()
+            self.todo = self.todo or subtask_todo
+            if subtask_todo:
+                self.completed = self.completed and subtask_completed
+
+        return self.todo, self.completed
+                
 
     def _lines(self, level):
         """Returns the sequence of lines of the string representation"""
@@ -418,17 +428,18 @@ def tasklist_to_tasktree(tasklist):
     while tasklist != [] and fail_count < 1000:
         t = tasklist.pop(0)
         try:
-            tasks_tree.add_subtask(
-                title = t['title'],
-                task_id = t['id'],
-                parent_id = t.get('parent'),
-                task_notes = t.get('notes').split('\n') if t.get('notes') else None,
-                task_todo = True,
-                task_completed = t.get('status') == 'completed')
+            if len(t['title'].strip()) > 0:
+                tasks_tree.add_subtask(
+                    title = t['title'],
+                    task_id = t['id'],
+                    parent_id = t.get('parent'),
+                    task_notes = t.get('notes').split('\n') if t.get('notes') else None,
+                    task_todo = True,
+                    task_completed = t.get('status') == 'completed')
         except ValueError:
             fail_count += 1
             tasklist.append(t)
- 
+
     return tasks_tree
 
 def print_todolist(profile, list_name=None):
@@ -479,7 +490,7 @@ def parse_text_to_tree(text):
         try:
             # assign task_depth; root depth starts at 0
             indent_level = len(matches[0][0])
-            
+
             # add the task to the tree
             last_task = tasks_tree.last_task_node_at_level(indent_level-1).add_subtask(
                 title=matches[0][2],
@@ -494,17 +505,19 @@ def parse_text_to_tree(text):
             last_task.notes.append(line.strip())
 
     f.close()
+
+    tasks_tree.normalize_todo()
     return tasks_tree
 
-def push_todolist(path, profile, list_name):
+def push_todolist(path, profile, list_name, only_todo):
     """Pushes the specified file to the specified todolist"""
     service = get_service(profile)
     list_id = get_list_id(service, list_name)
     tasks_tree = parse_path(path)
     erase_todolist(profile, list_id)
-    tasks_tree.push(service, list_id)
+    tasks_tree.push(service, list_id, only_todo)
 
-def sync_todolist(path, profile, list_name):
+def sync_todolist(path, profile, list_name, only_todo):
     """Synchronizes the specified file with the specified todolist"""
     tree_remote = get_gtask_list_as_tasktree(profile, list_name)
     tree_org = parse_path(path)
@@ -515,7 +528,7 @@ def sync_todolist(path, profile, list_name):
     service = get_service(profile)
     list_id = get_list_id(service, list_name)
     erase_todolist(profile, list_id)
-    tree_org.push(service, list_id)
+    tree_org.push(service, list_id, only_todo)
         
     # write merged tree to orgfile
     codecs.open(path, "w", "utf-8").write(str(tree_org))
@@ -532,6 +545,9 @@ def main():
             help='replace FILE with the contents of LISTNAME.')
     action.add_argument("--sync", action='store_true',
             help='synchronize changes between FILE and LISTNAME.')
+
+    parser.add_argument("--todo", action='store_true',
+            help='synchronize even not TODO tasks to remote.')
     
     parser.add_argument('--orgfile',
             metavar='FILE',
@@ -553,6 +569,8 @@ def main():
         parser.error('--orgfile must be specified when using --push')
     if args.sync and not args.orgfile:
         parser.error('--orgfile must be specified when using --sync')
+    if args.todo and not (args.push or args.sync):
+        parser.error('--todo can be specified only with using --sync or --push')
     
     if args.pull:
         if args.orgfile is None:
@@ -563,12 +581,12 @@ def main():
         if not os.path.exists(args.orgfile):
             print("The org-file you want to push does not exist.")
             sys.exit(2)
-        push_todolist(args.orgfile, args.profile, args.listname)
+        push_todolist(args.orgfile, args.profile, args.listname, args.todo)
     elif args.sync:
         if not os.path.exists(args.orgfile):
             print("The org-file you want to synchronize does not exist.")
             sys.exit(2)
-        sync_todolist(args.orgfile, args.profile, args.listname)
+        sync_todolist(args.orgfile, args.profile, args.listname, args.todo)
 
 if __name__ == "__main__":
     main()
