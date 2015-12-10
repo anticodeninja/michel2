@@ -8,6 +8,7 @@ import textwrap
 import os
 import sys
 import tempfile
+import datetime
 import michel.michel as m
 
 class TestMichel(unittest.TestCase):
@@ -255,6 +256,44 @@ class TestMichel(unittest.TestCase):
         m.treemerge(org_tree, remote_tree)
         
         self.assertEqual(str(org_tree), result_text)
+
+    def test_scheduled_and_closed_time(self):
+        # text should have trailing "\n" character, like most textfiles
+        org_text = textwrap.dedent("""\
+            * Headline 1
+              Normal notes
+            * Headline 2
+              SCHEDULED: <2015-11-18 Ср>
+            * Headline 3
+              SCHEDULED: <2015-12-09 Ср 19:00-20:00>
+            * DONE Headline 4
+              CLOSED: [2015-12-10 Чт 09:25]
+            * DONE Headline 5
+              CLOSED: [2015-12-10 Чт 09:25] SCHEDULED: <2015-12-09 Ср 19:00>
+            """)
+        tasktree = m.parse_text_to_tree(org_text)
+        
+        self.assertEqual(tasktree[0].closed_time, None)
+        self.assertEqual(tasktree[0].scheduled_start_time, None)
+        self.assertEqual(tasktree[0].scheduled_end_time, None)
+
+        self.assertEqual(tasktree[1].closed_time, None)
+        self.assertEqual(tasktree[1].scheduled_start_time, datetime.datetime(2015, 11, 18, 0, 0, tzinfo = m.LocalTzInfo()))
+        self.assertEqual(tasktree[1].scheduled_end_time, None)
+
+        self.assertEqual(tasktree[2].closed_time, None)
+        self.assertEqual(tasktree[2].scheduled_start_time, datetime.datetime(2015, 12, 9, 19, 0, tzinfo = m.LocalTzInfo()))
+        self.assertEqual(tasktree[2].scheduled_end_time, datetime.datetime(2015, 12, 9, 20, 0, tzinfo = m.LocalTzInfo()))
+
+        self.assertEqual(tasktree[3].closed_time, datetime.datetime(2015, 12, 10, 9, 25, tzinfo = m.LocalTzInfo()))
+        self.assertEqual(tasktree[3].scheduled_start_time, None)
+        self.assertEqual(tasktree[3].scheduled_end_time, None)
+
+        self.assertEqual(tasktree[4].closed_time, datetime.datetime(2015, 12, 10, 9, 25, tzinfo = m.LocalTzInfo()))
+        self.assertEqual(tasktree[4].scheduled_start_time, datetime.datetime(2015, 12, 9, 19, 0, tzinfo = m.LocalTzInfo()))
+        self.assertEqual(tasktree[4].scheduled_end_time, None)
+                         
+        self.assertEqual(str(tasktree), org_text)
 
 if __name__ == '__main__':
     unittest.main()

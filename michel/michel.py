@@ -21,11 +21,26 @@ import shutil
 import sys
 import re
 import io
+import datetime
+import time
 import ipdb
 
 RATIO_THRESHOLD = 0.85
 headline_regex = re.compile("^(\*+) *(DONE|TODO)? *(.*)")
 spec_re = re.compile("([^.]+): (.+)")
+spec_notes = re.compile("(?:CLOSED: \[(.*)\]|(?:SCHEDULED: <(.*)>) *)+")
+time_regex = re.compile("(\d+)-(\d+)-(\d+) \S+(?: (\d+):(\d+)(?:-(\d+):(\d+))?)?")
+
+class LocalTzInfo(datetime.tzinfo):
+    _offset = datetime.timedelta(seconds = time.timezone)
+    _dst = datetime.timedelta(seconds = time.daylight)
+    _name = time.tzname
+    def utcoffset(self, dt):
+        return self.__class__._offset
+    def dst(self, dt):
+        return self.__class__._dst
+    def tzname(self, dt):
+        return self.__class__._name
 
 class TasksTree(object):
     """
@@ -45,6 +60,9 @@ class TasksTree(object):
         self.notes = task_notes or []
         self.todo = task_todo
         self.completed = task_completed
+        self.closed_time = None
+        self.scheduled_start_time = None
+        self.scheduled_end_time = None
         
     def __getitem__(self, key):
         return self.subtasks[key]
@@ -125,6 +143,8 @@ class TasksTree(object):
             }
             if parent:
                 insert_cmd_args['parent'] = parent
+            if self.scheduled_start_time is not None:
+                insert_cmd_args['body']['due'] = self.scheduled_start_time.astimezone().isoformat()
             res = service.tasks().insert(**insert_cmd_args).execute()
             self.task_id = res['id']
         # the API head inserts, so we insert in reverse.
@@ -146,14 +166,14 @@ class TasksTree(object):
         res = []
         
         for subtask in self.subtasks:
-            line = '*' * (level + 1) + ' '
+            task_line = ['*' * (level + 1)]
             if subtask.completed:
-                line += 'DONE '
+                task_line.append('DONE')
             elif subtask.todo:
-                line += 'TODO '
-            line += subtask.title
+                task_line.append('TODO')
+            task_line.append(subtask.title)
                 
-            res.append(line)
+            res.append(' '.join(task_line))
 
             for note_line in subtask.notes:
                 # add initial space to lines starting w/'*', so that it isn't treated as a task
@@ -486,7 +506,8 @@ def parse_text_to_tree(text):
     last_task = None
 
     for line in f:
-        matches = headline_regex.findall(line.rstrip("\n"))
+        line = line.strip()
+        matches = headline_regex.findall(line)
         try:
             # assign task_depth; root depth starts at 0
             indent_level = len(matches[0][0])
@@ -498,10 +519,30 @@ def parse_text_to_tree(text):
                 task_completed=matches[0][1] == 'DONE')
 
         except IndexError:
+            # this is not a task, but a task-notes line
+            
             if last_task is None:
                 raise ValueError("Text without task is not permitted")
             
-            # this is not a task, but a task-notes line
+            matches = spec_notes.findall(line)
+            for match in matches:
+                if len(match[0]) > 0:
+                    time = [int(x) for x in time_regex.findall(match[0])[0] if len(x) > 0]
+                    last_task.closed_time = datetime.datetime(time[0], time[1], time[2],
+                                                              time[3], time[4], tzinfo = LocalTzInfo())
+                if len(match[1]) > 0:
+                    time = [int(x) for x in time_regex.findall(match[1])[0] if len(x) > 0]
+
+                    last_task.scheduled_start_time = datetime.datetime(time[0], time[1], time[2],
+                                                                       tzinfo = LocalTzInfo())
+
+                    if len(time) > 3:
+                        last_task.scheduled_start_time = datetime.datetime(time[0], time[1], time[2],
+                                                                           time[3], time[4], tzinfo = LocalTzInfo())
+                    if len(time) > 5:
+                        last_task.scheduled_end_time = datetime.datetime(time[0], time[1], time[2],
+                                                                         time[5], time[6], tzinfo = LocalTzInfo())
+
             last_task.notes.append(line.strip())
 
     f.close()
