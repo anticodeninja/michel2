@@ -24,8 +24,11 @@ import io
 import datetime
 import time
 import ipdb
+import json
 
 RATIO_THRESHOLD = 0.85
+MICHEL_PROFILE = ".michel-profile"
+
 headline_regex = re.compile("^(\*+) *(DONE|TODO)? *(.*)")
 spec_re = re.compile("([^.]+): (.+)")
 spec_notes = re.compile("(?:CLOSED: \[(.*)\]|(?:SCHEDULED: <(.*)>) *)+")
@@ -579,14 +582,16 @@ def main():
     parser = argparse.ArgumentParser(description="Synchronize org-mode text" 
                                      "files with a google-tasks list.")
     
-    action = parser.add_mutually_exclusive_group(required=True)
+    action = parser.add_mutually_exclusive_group()
     action.add_argument("--push", action='store_true',
             help='replace LISTNAME with the contents of FILE.')
     action.add_argument("--pull", action='store_true',
             help='replace FILE with the contents of LISTNAME.')
     action.add_argument("--sync", action='store_true',
             help='synchronize changes between FILE and LISTNAME.')
-
+    action.add_argument("--list", action='store_true',
+            help='use action from list.')
+    
     parser.add_argument("--todo", action='store_true',
             help='synchronize even not TODO tasks to remote.')
     
@@ -605,6 +610,9 @@ def main():
             help='A GTasks list to pull from / push to (default list if empty)')
     
     args = parser.parse_args()
+
+    if not args.push and not args.sync and not args.pull:
+        args.list = True
     
     if args.push and not args.orgfile:
         parser.error('--orgfile must be specified when using --push')
@@ -628,6 +636,20 @@ def main():
             print("The org-file you want to synchronize does not exist.")
             sys.exit(2)
         sync_todolist(args.orgfile, args.profile, args.listname, args.todo)
-
+    elif args.list:
+        print("Use list of actions")
+        with codecs.open(MICHEL_PROFILE, 'r', 'utf-8') as actions_file:
+            actions = json.load(actions_file)
+        for entry in actions:
+            if entry['action'] == 'sync':
+                print ("Sync {0} <-> {1}{2}".format(entry['org_file'], entry['profile'], entry['listname']))
+                sync_todolist(entry['org_file'], entry['profile'], entry['listname'], entry['todo'])
+            elif entry['action'] == 'push':
+                print ("Push {0} -> {1}{2}".format(entry['org_file'], entry['profile'], entry['listname']))
+                push_todolist(entry['org_file'], entry['profile'], entry['listname'], entry['todo'])
+            elif entry['action'] == 'pull':
+                print ("Pull {0} -> {1}{2}".format(entry['org_file'], entry['profile'], entry['listname']))
+                write_todolist(entry['org_file'], entry['profile'], entry['listname'])
+        
 if __name__ == "__main__":
     main()
