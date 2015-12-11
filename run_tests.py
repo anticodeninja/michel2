@@ -162,6 +162,7 @@ class TestMichel(unittest.TestCase):
               Original text.
             * TODO Headline B
             * TODO Headline C
+              SCHEDULED: <2015-12-09 Ср 20:00-21:00>
             """)
         remote_text = textwrap.dedent("""\
             * Headline A1
@@ -170,12 +171,14 @@ class TestMichel(unittest.TestCase):
             * TODO Headline C
               PREV_ORG_TITLE: Headline B
             * TODO Headline C
+              SCHEDULED: <2015-12-09 Ср 19:00-20:00>
             """)
         result_text = textwrap.dedent("""\
             * Headline A1
               Original text.
             * TODO Headline B
             * TODO Headline C
+              SCHEDULED: <2015-12-09 Ср 20:00-21:00>
             """)
         
         org_tree = m.parse_text_to_tree(org_text)
@@ -192,6 +195,7 @@ class TestMichel(unittest.TestCase):
             * TODO Headline C
               PREV_ORG_TITLE: Headline B
             * TODO Headline C
+              SCHEDULED: <2015-12-09 Ср 19:00-20:00>
             """)
         org_text = remote_text
         result_text = remote_text
@@ -267,9 +271,9 @@ class TestMichel(unittest.TestCase):
             * Headline 3
               SCHEDULED: <2015-12-09 Ср 19:00-20:00>
             * DONE Headline 4
-              CLOSED: [2015-12-10 Чт 09:25]
+              CLOSED: [2015-12-10 Чт 03:25]
             * DONE Headline 5
-              CLOSED: [2015-12-10 Чт 09:25] SCHEDULED: <2015-12-09 Ср 19:00>
+              CLOSED: [2015-12-10 Чт 03:25] SCHEDULED: <2015-12-09 Ср 03:00>
             """)
         tasktree = m.parse_text_to_tree(org_text)
         
@@ -280,18 +284,21 @@ class TestMichel(unittest.TestCase):
         self.assertEqual(tasktree[1].closed_time, None)
         self.assertEqual(tasktree[1].scheduled_start_time, datetime.datetime(2015, 11, 18, 0, 0, tzinfo = m.LocalTzInfo()))
         self.assertEqual(tasktree[1].scheduled_end_time, None)
+        self.assertEqual(m.to_google_date_format(tasktree[1].scheduled_start_time), "2015-11-18T00:00:00Z")
 
         self.assertEqual(tasktree[2].closed_time, None)
         self.assertEqual(tasktree[2].scheduled_start_time, datetime.datetime(2015, 12, 9, 19, 0, tzinfo = m.LocalTzInfo()))
         self.assertEqual(tasktree[2].scheduled_end_time, datetime.datetime(2015, 12, 9, 20, 0, tzinfo = m.LocalTzInfo()))
+        self.assertEqual(m.to_google_date_format(tasktree[2].scheduled_start_time), "2015-12-09T00:00:00Z")
 
-        self.assertEqual(tasktree[3].closed_time, datetime.datetime(2015, 12, 10, 9, 25, tzinfo = m.LocalTzInfo()))
+        self.assertEqual(tasktree[3].closed_time, datetime.datetime(2015, 12, 10, 3, 25, tzinfo = m.LocalTzInfo()))
         self.assertEqual(tasktree[3].scheduled_start_time, None)
         self.assertEqual(tasktree[3].scheduled_end_time, None)
 
-        self.assertEqual(tasktree[4].closed_time, datetime.datetime(2015, 12, 10, 9, 25, tzinfo = m.LocalTzInfo()))
-        self.assertEqual(tasktree[4].scheduled_start_time, datetime.datetime(2015, 12, 9, 19, 0, tzinfo = m.LocalTzInfo()))
+        self.assertEqual(tasktree[4].closed_time, datetime.datetime(2015, 12, 10, 3, 25, tzinfo = m.LocalTzInfo()))
+        self.assertEqual(tasktree[4].scheduled_start_time, datetime.datetime(2015, 12, 9, 3, 0, tzinfo = m.LocalTzInfo()))
         self.assertEqual(tasktree[4].scheduled_end_time, None)
+        self.assertEqual(m.to_google_date_format(tasktree[4].scheduled_start_time), "2015-12-09T00:00:00Z")
                          
         self.assertEqual(str(tasktree), org_text)
 

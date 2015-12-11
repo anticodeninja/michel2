@@ -268,8 +268,6 @@ def treemerge(tree_org, tree_remote):
         diff_notes = []
 
         # Merge attributes
-        if map_entry[0].task.todo == True and map_entry[1].task.todo != True:
-            map_entry[1].task.todo = True
         if map_entry[0].task.completed == True and map_entry[1].task.completed != True:
             map_entry[1].task.completed = True
 
@@ -286,6 +284,10 @@ def treemerge(tree_org, tree_remote):
                     if matches[0][0] == "PREV_ORG_TITLE" or \
                        matches[0][0] == "REMOTE_APPEND_NOTE":
                         continue
+                    
+                matches = time_regex.findall(note_line)
+                if len(matches) > 0:
+                    continue
                     
                 if note_line not in map_entry[1].task.notes:
                     diff_notes.append("REMOTE_APPEND_NOTE: {0}".format(note_line))
@@ -553,6 +555,9 @@ def parse_text_to_tree(text):
     tasks_tree.normalize_todo()
     return tasks_tree
 
+def to_google_date_format(value):
+    return "{0:0>4}-{1:0>2}-{2:0>2}T00:00:00Z".format(value.year, value.month, value.day)
+
 def push_todolist(path, profile, list_name, only_todo):
     """Pushes the specified file to the specified todolist"""
     service = get_service(profile)
@@ -642,13 +647,13 @@ def main():
             actions = json.load(actions_file)
         for entry in actions:
             if entry['action'] == 'sync':
-                print ("Sync {0} <-> {1}{2}".format(entry['org_file'], entry['profile'], entry['listname']))
+                print ("Sync {0} <-> {1}:{2}".format(entry['org_file'], entry['profile'], entry['listname']))
                 sync_todolist(entry['org_file'], entry['profile'], entry['listname'], entry['todo'])
             elif entry['action'] == 'push':
-                print ("Push {0} -> {1}{2}".format(entry['org_file'], entry['profile'], entry['listname']))
+                print ("Push {0} -> {1}:{2}".format(entry['org_file'], entry['profile'], entry['listname']))
                 push_todolist(entry['org_file'], entry['profile'], entry['listname'], entry['todo'])
             elif entry['action'] == 'pull':
-                print ("Pull {0} -> {1}{2}".format(entry['org_file'], entry['profile'], entry['listname']))
+                print ("Pull {0} -> {1}:{2}".format(entry['org_file'], entry['profile'], entry['listname']))
                 write_todolist(entry['org_file'], entry['profile'], entry['listname'])
         
 if __name__ == "__main__":
