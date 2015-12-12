@@ -13,6 +13,35 @@ import michel.michel as m
 
 class TestMichel(unittest.TestCase):
 
+    def test_format_google_dates(self):
+        self.assertEqual("2015-12-09T00:00:00Z",
+                         m.to_google_date_format(
+                             datetime.datetime(2015, 12, 9, 20, 00)))
+        self.assertEqual("2015-11-18T00:00:00Z",
+                         m.to_google_date_format(
+                             datetime.datetime(2015, 11, 18)))
+        self.assertEqual("2015-12-10T00:00:00Z",
+                         m.to_google_date_format(
+                             datetime.datetime(2015, 12, 10, 3, 25)))
+                         
+
+    def test_format_emacs_dates(self):
+        m.default_locale = 'Russian_Russia.1251'
+        self.assertEqual("2015-12-09 Ср 20:00-21:00",
+                         m.to_emacs_date_format(True,
+                                           datetime.datetime(2015, 12, 9, 20, 00),
+                                           datetime.datetime(2015, 12, 9, 21, 00)))
+        
+        m.default_locale = 'English_United States.1252'
+        self.assertEqual("2015-11-18 Wed",
+                         m.to_emacs_date_format(False,
+                                           datetime.datetime(2015, 11, 18)))
+        
+        m.default_locale = 'German_Germany.1252'
+        self.assertEqual("2015-12-10 Do 03:25",
+                         m.to_emacs_date_format(True,
+                                           datetime.datetime(2015, 12, 10, 3, 25)))
+
     def test_text_to_tasktree(self):
         # text should have trailing "\n" character, like most textfiles
         org_text = textwrap.dedent("""\
@@ -157,6 +186,7 @@ class TestMichel(unittest.TestCase):
         self.assertEqual(str(org_tree), result_text)
 
     def test_remerge_with_fixes(self):
+        m.default_locale = 'Russian_Russia.1251'
         org_text = textwrap.dedent("""\
             * Headline A1
               Original text.
@@ -188,6 +218,7 @@ class TestMichel(unittest.TestCase):
         self.assertEqual(str(org_tree), result_text)
 
     def test_remerge_without_fixes(self):
+        m.default_locale = 'Russian_Russia.1251'
         remote_text = textwrap.dedent("""\
             * Headline A1
               Original text.
@@ -248,12 +279,13 @@ class TestMichel(unittest.TestCase):
             * Headline A
             * Headline B
             * DONE Headline C
+              CLOSED: [{0}]
             * TODO Headline D
             * TODO Headline E
             ** DONE Headline E1
             * DONE Headline F
             ** Headline F1
-            """)
+            """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
         
         org_tree = m.parse_text_to_tree(org_text)
         remote_tree = m.parse_text_to_tree(remote_text)
@@ -262,7 +294,7 @@ class TestMichel(unittest.TestCase):
         self.assertEqual(str(org_tree), result_text)
 
     def test_scheduled_and_closed_time(self):
-        # text should have trailing "\n" character, like most textfiles
+        m.default_locale = 'Russian_Russia.1251'
         org_text = textwrap.dedent("""\
             * Headline 1
               Normal notes
@@ -280,27 +312,67 @@ class TestMichel(unittest.TestCase):
         self.assertEqual(tasktree[0].closed_time, None)
         self.assertEqual(tasktree[0].scheduled_start_time, None)
         self.assertEqual(tasktree[0].scheduled_end_time, None)
+        self.assertFalse(tasktree[0].scheduled_has_time)
 
         self.assertEqual(tasktree[1].closed_time, None)
         self.assertEqual(tasktree[1].scheduled_start_time, datetime.datetime(2015, 11, 18, 0, 0, tzinfo = m.LocalTzInfo()))
         self.assertEqual(tasktree[1].scheduled_end_time, None)
         self.assertEqual(m.to_google_date_format(tasktree[1].scheduled_start_time), "2015-11-18T00:00:00Z")
+        self.assertFalse(tasktree[1].scheduled_has_time)
 
         self.assertEqual(tasktree[2].closed_time, None)
         self.assertEqual(tasktree[2].scheduled_start_time, datetime.datetime(2015, 12, 9, 19, 0, tzinfo = m.LocalTzInfo()))
         self.assertEqual(tasktree[2].scheduled_end_time, datetime.datetime(2015, 12, 9, 20, 0, tzinfo = m.LocalTzInfo()))
         self.assertEqual(m.to_google_date_format(tasktree[2].scheduled_start_time), "2015-12-09T00:00:00Z")
+        self.assertTrue(tasktree[2].scheduled_has_time)
 
         self.assertEqual(tasktree[3].closed_time, datetime.datetime(2015, 12, 10, 3, 25, tzinfo = m.LocalTzInfo()))
         self.assertEqual(tasktree[3].scheduled_start_time, None)
         self.assertEqual(tasktree[3].scheduled_end_time, None)
+        self.assertFalse(tasktree[3].scheduled_has_time)
 
         self.assertEqual(tasktree[4].closed_time, datetime.datetime(2015, 12, 10, 3, 25, tzinfo = m.LocalTzInfo()))
         self.assertEqual(tasktree[4].scheduled_start_time, datetime.datetime(2015, 12, 9, 3, 0, tzinfo = m.LocalTzInfo()))
         self.assertEqual(tasktree[4].scheduled_end_time, None)
         self.assertEqual(m.to_google_date_format(tasktree[4].scheduled_start_time), "2015-12-09T00:00:00Z")
+        self.assertTrue(tasktree[4].scheduled_has_time)
                          
         self.assertEqual(str(tasktree), org_text)
+
+    def test_sync_time(self):
+        m.default_locale = 'Russian_Russia.1251'
+        org_text = textwrap.dedent("""\
+            * TODO Headline A
+            * TODO Headline B
+            * TODO Headline C
+              SCHEDULED: <2015-12-09 Ср 20:00-21:00>
+            """)
+        remote_text = textwrap.dedent("""\
+            * TODO Headline A
+              SCHEDULED: <2015-12-09 Ср>
+            * TODO Headline B
+            * DONE Headline C
+              SCHEDULED: <2015-12-09 Ср 20:00-21:00>
+            * TODO Headline D
+              SCHEDULED: <2015-12-09 Ср>
+            """)
+        
+        result_text = textwrap.dedent("""\
+            * TODO Headline A
+              SCHEDULED: <2015-12-09 Ср>
+            * TODO Headline B
+            * DONE Headline C
+              CLOSED: [{0}] SCHEDULED: <2015-12-09 Ср 20:00-21:00>
+            * TODO Headline D
+              SCHEDULED: <2015-12-09 Ср>
+            """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
+        
+        org_tree = m.parse_text_to_tree(org_text)
+        remote_tree = m.parse_text_to_tree(remote_text)
+        m.treemerge(org_tree, remote_tree)
+        
+        self.assertEqual(str(org_tree), result_text)
+
 
 if __name__ == '__main__':
     unittest.main()

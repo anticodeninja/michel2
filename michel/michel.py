@@ -25,6 +25,10 @@ import datetime
 import time
 import ipdb
 import json
+import locale
+
+default_locale = locale.setlocale(locale.LC_TIME, '')
+locale.setlocale(locale.LC_TIME, 'C')
 
 RATIO_THRESHOLD = 0.85
 MICHEL_PROFILE = ".michel-profile"
@@ -65,6 +69,7 @@ class TasksTree(object):
         self.completed = task_completed
         self.closed_time = None
         self.scheduled_start_time = None
+        self.scheduled_has_time = False
         self.scheduled_end_time = None
         
     def __getitem__(self, key):
@@ -174,9 +179,21 @@ class TasksTree(object):
                 task_line.append('DONE')
             elif subtask.todo:
                 task_line.append('TODO')
-            task_line.append(subtask.title)
-                
+            task_line.append(subtask.title)    
             res.append(' '.join(task_line))
+
+            time_line = [' ' * (level + 1)]
+            if subtask.closed_time:
+                time_line.append("CLOSED: [{0}]".format(
+                                 to_emacs_date_format(True, subtask.closed_time)))
+            if subtask.scheduled_start_time:
+                time_line.append("SCHEDULED: <{0}>".format(
+                                 to_emacs_date_format(
+                                     subtask.scheduled_has_time,
+                                     subtask.scheduled_start_time,
+                                     subtask.scheduled_end_time)))
+            if len(time_line) > 1:
+                res.append(' '.join(time_line))
 
             for note_line in subtask.notes:
                 # add initial space to lines starting w/'*', so that it isn't treated as a task
@@ -270,6 +287,10 @@ def treemerge(tree_org, tree_remote):
         # Merge attributes
         if map_entry[0].task.completed == True and map_entry[1].task.completed != True:
             map_entry[1].task.completed = True
+            map_entry[1].task.closed_time = datetime.datetime.now()
+
+        if map_entry[0].task.scheduled_start_time and not map_entry[1].task.scheduled_start_time:
+            map_entry[1].task.scheduled_start_time = map_entry[0].task.scheduled_start_time
 
         # Merge contents
         if map_entry[0].task.title != map_entry[1].task.title:
@@ -308,7 +329,9 @@ def treemerge(tree_org, tree_remote):
             title=new_task.task.title,
             task_notes=new_task.task.notes,
             task_todo=new_task.task.todo,
-            task_completed=new_task.task.completed)
+            task_completed=new_task.task.completed
+        )
+        created_task.scheduled_start_time = new_task.task.scheduled_start_time
 
         mapping.append(tuple([PartTree(parent_task, created_task), new_task, True]))
 
@@ -530,25 +553,30 @@ def parse_text_to_tree(text):
                 raise ValueError("Text without task is not permitted")
             
             matches = spec_notes.findall(line)
+            note_string = True
             for match in matches:
                 if len(match[0]) > 0:
+                    note_string = False
                     time = [int(x) for x in time_regex.findall(match[0])[0] if len(x) > 0]
                     last_task.closed_time = datetime.datetime(time[0], time[1], time[2],
                                                               time[3], time[4], tzinfo = LocalTzInfo())
                 if len(match[1]) > 0:
+                    note_string = False
                     time = [int(x) for x in time_regex.findall(match[1])[0] if len(x) > 0]
 
                     last_task.scheduled_start_time = datetime.datetime(time[0], time[1], time[2],
                                                                        tzinfo = LocalTzInfo())
 
                     if len(time) > 3:
+                        last_task.scheduled_has_time = True
                         last_task.scheduled_start_time = datetime.datetime(time[0], time[1], time[2],
                                                                            time[3], time[4], tzinfo = LocalTzInfo())
                     if len(time) > 5:
                         last_task.scheduled_end_time = datetime.datetime(time[0], time[1], time[2],
                                                                          time[5], time[6], tzinfo = LocalTzInfo())
 
-            last_task.notes.append(line.strip())
+            if note_string:
+                last_task.notes.append(line.strip())
 
     f.close()
 
@@ -556,7 +584,25 @@ def parse_text_to_tree(text):
     return tasks_tree
 
 def to_google_date_format(value):
-    return "{0:0>4}-{1:0>2}-{2:0>2}T00:00:00Z".format(value.year, value.month, value.day)
+    return value.strftime("%Y-%m-%dT00:00:00Z")
+
+def to_emacs_date_format(has_duration, value, end_value = None):
+    try:
+        old_locale = locale.getlocale(locale.LC_TIME)
+        locale.setlocale(locale.LC_TIME, default_locale)
+        res = value.strftime("%Y-%m-%d %a")
+
+        if has_duration:
+            res += value.strftime(" %H:%M")
+            if end_value:
+                res += end_value.strftime("-%H:%M")
+
+        # It's hell...
+        res = res.encode('latin-1').decode(locale.getpreferredencoding())
+                                           
+        return res
+    finally:
+        locale.setlocale(locale.LC_TIME, old_locale)    
 
 def push_todolist(path, profile, list_name, only_todo):
     """Pushes the specified file to the specified todolist"""
