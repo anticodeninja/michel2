@@ -69,15 +69,6 @@ class TasksTree(object):
         self.subtasks.append(task)
         return task
 
-    def normalize_todo(self):
-        for subtask in self.subtasks:
-            subtask_todo, subtask_completed = subtask.normalize_todo()
-            self.todo = self.todo or subtask_todo
-            if subtask_todo:
-                self.completed = self.completed and subtask_completed
-
-        return self.todo, self.completed
-
     def parse_system_notes(self):
         for subtask in self.subtasks:
             subtask.parse_system_notes()

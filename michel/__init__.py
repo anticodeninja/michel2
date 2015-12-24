@@ -100,7 +100,6 @@ def parse_text_to_tree(text, remote = False):
     f.close()
 
     tasks_tree.parse_system_notes()
-    tasks_tree.normalize_todo()
     return tasks_tree
 
 def push_todolist(path, profile, list_name, only_todo):

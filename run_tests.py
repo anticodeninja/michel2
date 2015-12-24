@@ -286,33 +286,11 @@ class TestMichel(unittest.TestCase):
         
         self.assertEqual(str(org_tree), result_text)
 
-    def test_merge_normalize_todo(self):
-        org_text = textwrap.dedent("""\
-            * Headline A
-            ** Headline A1
-            * Headline B
-            ** TODO Headline B1
-            * DONE Headline C
-            ** TODO Headline C1
-            * TODO Headline D
-            """)
-        result_text = textwrap.dedent("""\
-            * Headline A
-            ** Headline A1
-            * TODO Headline B
-            ** TODO Headline B1
-            * TODO Headline C
-            ** TODO Headline C1
-            * TODO Headline D
-            """)
-        
-        org_tree = m.parse_text_to_tree(org_text, False)
-        self.assertEqual(str(org_tree), result_text)
-
     def test_merge_sync_todo_only(self):
         org_text = textwrap.dedent("""\
             * Headline A
             * Headline B
+            ** TODO Headline B1
             * TODO Headline C
             * TODO Headline D
             * Headline E
@@ -321,19 +299,24 @@ class TestMichel(unittest.TestCase):
             ** Headline F1
             """)
         remote_text = textwrap.dedent("""\
+            * DONE Headline B1
             * DONE Headline C
             * TODO Headline D
+            * TODO Headline G
             """)
         result_text = textwrap.dedent("""\
             * Headline A
             * Headline B
+            ** DONE Headline B1
+               CLOSED: [{0}]
             * DONE Headline C
               CLOSED: [{0}]
             * TODO Headline D
-            * TODO Headline E
+            * Headline E
             ** DONE Headline E1
             * DONE Headline F
             ** Headline F1
+            * TODO Headline G
             """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
         
         org_tree = m.parse_text_to_tree(org_text, False)

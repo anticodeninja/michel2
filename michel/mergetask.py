@@ -2,7 +2,7 @@ import datetime
 from difflib import SequenceMatcher
 from ipdb import set_trace
 
-RATIO_THRESHOLD = 0.85
+RATIO_THRESHOLD = 0.9
 
 class PartTree:
     def __init__(self, parent, task):
@@ -15,24 +15,19 @@ class PartTree:
             self.titles.append(task.title)
         if task.prev_title is not None:
             self.titles.append(task.prev_title)
-        
-        self.notes = " ".join(task.notes)
 
         for title in self.titles:
             for char in title:
                 self.hash_sum += ord(char)
-        for char in self.notes:
-            self.hash_sum += ord(char)
 
     def is_equal(self, another):
         if len(self.titles) == 0 and len(another.titles) == 0:
             return True
         
-        return any(a == b for a in self.titles for b in another.titles) and self.notes == another.notes
+        return any(a == b for a in self.titles for b in another.titles)
 
     def calc_ratio(self, another):
-        return max(self.__calc_ratio(a, b) for a in self.titles for b in another.titles) * 0.7 +\
-            self.__calc_ratio(self.notes, another.notes) * 0.3
+        return max(self.__calc_ratio(a, b) for a in self.titles for b in another.titles)
 
     def __calc_ratio(self, str1, str2):
         if len(str1) == 0 and len(str2) == 0:
