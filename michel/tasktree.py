@@ -1,9 +1,11 @@
 import codecs
 import re
+import io
 import datetime
 
 from michel.utils import *
 
+headline_regex = re.compile("^(\*+) *(DONE|TODO)? *(.*)")
 timeline_regex = re.compile("(?:CLOSED: \[(.*)\]|(?:SCHEDULED: <(.*)>) *)+")
 systemline_regex = re.compile("([^.]+): (.+)")
 
@@ -96,9 +98,10 @@ class TasksTree(object):
                 if matches[0][0] == "PREV_TITLE":
                     note_string = False
                     self.prev_title = matches[0][1]
-
-                if matches[0][0] == "SYNC":
+                elif matches[0][0] == "SYNC":
                     note_string = not self.remote
+                else:
+                    note_string = False
                     
             if note_string:
                 real_notes.append(line)
@@ -159,10 +162,57 @@ class TasksTree(object):
         # at the end of the last line of the file.
         return '\n'.join(self._lines(0)) + "\n"
 
-    def _print(self):
-        print(self.__str__())
-
-    def write_to_orgfile(self, fname):
+    def write_file(self, fname):
         f = codecs.open(fname, "w", "utf-8")
         f.write(self.__str__())
         f.close()
+
+    def parse_file(path):
+        """Parses an org-mode file and returns a tree"""
+        file_lines = codecs.open(path, "r", "utf-8").readlines()
+        file_text = "".join(file_lines)
+        return TasksTree.parse_text(file_text)
+    
+    def parse_text(text, remote = False):
+        """Parses an org-mode formatted block of text and returns a tree"""
+        # create a (read-only) file object containing *text*
+        f = io.StringIO(text)
+    
+        tasks_tree = TasksTree(None)
+        tasks_tree.remote = remote
+    
+        last_task = None
+        task_stack = [tasks_tree]
+
+        for line in f:
+            line = line.strip()
+            matches = headline_regex.findall(line)
+            try:
+                # assign task_depth; root depth starts at 0
+                indent_level = len(matches[0][0])
+
+                # add the task to the tree
+                last_task = task_stack[indent_level - 1].add_subtask(matches[0][2])
+
+                # expand if it is needed
+                if (indent_level + 1) > len(task_stack):
+                    task_stack = [task_stack[x] if x < len(task_stack) else None
+                                  for x in range(indent_level + 1)]
+                
+                task_stack[indent_level] = last_task
+            
+                last_task.todo = matches[0][1] == 'DONE' or matches[0][1] == 'TODO'
+                last_task.completed = matches[0][1] == 'DONE'
+
+            except IndexError:
+                # this is not a task, but a task-notes line
+            
+                if last_task is None:
+                    raise ValueError("Text without task is not permitted")
+
+                last_task.notes.append(line)
+
+        f.close()
+
+        tasks_tree.parse_system_notes()
+        return tasks_tree

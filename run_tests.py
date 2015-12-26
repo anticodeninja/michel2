@@ -104,7 +104,7 @@ class TestMichel(unittest.TestCase):
             * DONE Headline 2
             ** Headline 2.1
             """)
-        tasktree = m.parse_text_to_tree(org_text, False)
+        tasktree = m.TasksTree.parse_text(org_text, False)
         self.assertEqual(str(tasktree), result_text)
 
     @unittest.skipIf(os.name == 'nt', "unicode console is not supported")
@@ -113,19 +113,14 @@ class TestMichel(unittest.TestCase):
         Test ability to print unicode text
         """
         
-        unicode_task = {
-            'status': 'needsAction',
-            'kind': 'tasks#task',
-            'title': 'السلام عليكم',
-            'notes': 'viele Grüße',
-            'id': 'ABC123',
-        }
-        tasks_tree = m.tasklist_to_tasktree([unicode_task])
+        tasks_tree = m.TasksTree(None)
+        task = tasks_tree.add_subtask('السلام عليكم')
+        task.notes = ['viele Grüße']
 
         old_stdout = sys.stdout
         sys.stdout = open(os.devnull, 'w')
         try:
-            tasks_tree._print()
+            print(tasks_tree)
         except UnicodeDecodeError:
             self.fail("TasksTree._print() raised UnicodeDecodeError")
         sys.stdout.close()
@@ -135,20 +130,16 @@ class TestMichel(unittest.TestCase):
         """
         Test ability to pull unicode text into orgfile
         """
-        unicode_task = {
-            'status': 'needsAction',
-            'kind': 'tasks#task',
-            'title': 'السلام عليكم',
-            'notes': 'viele Grüße',
-            'id': 'ABC123',
-        }
-        tasks_tree = m.tasklist_to_tasktree([unicode_task])
+
+        tasks_tree = m.TasksTree(None)
+        task = tasks_tree.add_subtask('السلام عليكم')
+        task.notes = ['viele Grüße']
 
         with tempfile.NamedTemporaryFile() as temp_file:
             temp_file_name = temp_file.name
             
         try:
-            tasks_tree.write_to_orgfile(temp_file_name)
+            tasks_tree.write_file(temp_file_name)
         except UnicodeDecodeError:
             self.fail("TasksTree.write_to_orgfile() raised UnicodeDecodeError")
 
@@ -170,7 +161,7 @@ class TestMichel(unittest.TestCase):
             ** Headline 2.1
             """)
 
-        self.assertRaises(ValueError, m.parse_text_to_tree, org_text)
+        self.assertRaises(ValueError, m.TasksTree.parse_text, org_text)
 
     def test_no_headlines(self):
         """
@@ -184,11 +175,11 @@ class TestMichel(unittest.TestCase):
             Another line of it.
             """)
 
-        self.assertRaises(ValueError, m.parse_text_to_tree, org_text)
+        self.assertRaises(ValueError, m.TasksTree.parse_text, org_text)
 
     def test_empty_file(self):
         org_text = "" # empty file
-        m.parse_text_to_tree(org_text)
+        m.TasksTree.parse_text(org_text)
         
     def test_safemerge(self):
         org_text = textwrap.dedent("""\
@@ -224,8 +215,8 @@ class TestMichel(unittest.TestCase):
               SYNC: New B2 body text.
             """)
         
-        org_tree = m.parse_text_to_tree(org_text, False)
-        remote_tree = m.parse_text_to_tree(remote_text, True)
+        org_tree = m.TasksTree.parse_text(org_text, False)
+        remote_tree = m.TasksTree.parse_text(remote_text, True)
         m.treemerge(org_tree, remote_tree)
         
         self.assertEqual(str(org_tree), result_text)
@@ -258,8 +249,8 @@ class TestMichel(unittest.TestCase):
               SCHEDULED: <2015-12-09 Wed 20:00-21:00>
             """)
         
-        org_tree = m.parse_text_to_tree(org_text, False)
-        remote_tree = m.parse_text_to_tree(remote_text, True)
+        org_tree = m.TasksTree.parse_text(org_text, False)
+        remote_tree = m.TasksTree.parse_text(remote_text, True)
         m.treemerge(org_tree, remote_tree)
         
         self.assertEqual(str(org_tree), result_text)
@@ -280,8 +271,8 @@ class TestMichel(unittest.TestCase):
         org_text = remote_text
         result_text = remote_text
         
-        org_tree = m.parse_text_to_tree(org_text, False)
-        remote_tree = m.parse_text_to_tree(remote_text, True)
+        org_tree = m.TasksTree.parse_text(org_text, False)
+        remote_tree = m.TasksTree.parse_text(remote_text, True)
         m.treemerge(org_tree, remote_tree)
         
         self.assertEqual(str(org_tree), result_text)
@@ -319,8 +310,8 @@ class TestMichel(unittest.TestCase):
             * TODO Headline G
             """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
         
-        org_tree = m.parse_text_to_tree(org_text, False)
-        remote_tree = m.parse_text_to_tree(remote_text, True)
+        org_tree = m.TasksTree.parse_text(org_text, False)
+        remote_tree = m.TasksTree.parse_text(remote_text, True)
         m.treemerge(org_tree, remote_tree)
         
         self.assertEqual(str(org_tree), result_text)
@@ -341,7 +332,7 @@ class TestMichel(unittest.TestCase):
             * DONE Headline 5
               CLOSED: [2015-12-10 Thu 03:25] SCHEDULED: <2015-12-09 Wed 03:00>
             """)
-        tasktree = m.parse_text_to_tree(org_text, False)
+        tasktree = m.TasksTree.parse_text(org_text, False)
         
         self.assertEqual(tasktree[0].closed_time, None)
         self.assertEqual(tasktree[0].scheduled_start_time, None)
@@ -403,8 +394,8 @@ class TestMichel(unittest.TestCase):
               SCHEDULED: <2015-12-09 Wed>
             """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
         
-        org_tree = m.parse_text_to_tree(org_text, False)
-        remote_tree = m.parse_text_to_tree(remote_text, False)
+        org_tree = m.TasksTree.parse_text(org_text, False)
+        remote_tree = m.TasksTree.parse_text(remote_text, False)
         m.treemerge(org_tree, remote_tree)
         
         self.assertEqual(str(org_tree), result_text)
@@ -420,7 +411,7 @@ class TestMichel(unittest.TestCase):
               Normal note
             """)
         
-        org_tree = m.parse_text_to_tree(org_text, False)
+        org_tree = m.TasksTree.parse_text(org_text, False)
 
         self.assertEqual(len(org_tree), 1)
         self.assertEqual(org_tree[0].title, "Headline B")
@@ -432,7 +423,7 @@ class TestMichel(unittest.TestCase):
             "SYNC: Text which should be ignored",
             "Normal note"])
 
-        org_tree = m.parse_text_to_tree(org_text, True)
+        org_tree = m.TasksTree.parse_text(org_text, True)
 
         self.assertEqual(len(org_tree), 1)
         self.assertEqual(org_tree[0].title, "Headline B")
