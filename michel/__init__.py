@@ -17,6 +17,7 @@ import locale
 from michel.utils import *
 from michel.gtasks import *
 from michel.mergetask import *
+from michel.mergeconf import *
 
 MICHEL_PROFILE = ".michel-profile"
         

@@ -3,6 +3,7 @@
 """
 Suite of unit-tests for testing Michel
 """
+
 import unittest
 import textwrap
 import os
@@ -15,12 +16,6 @@ import michel as m
 from tests import getLocaleAlias
 
 class TestMergeConf:
-    def get_index(self, items, pred):
-        for i, v in enumerate(items):
-            if pred(v):
-                return i
-        return None
-                
     def is_needed(self, item):
         return item.todo and not item.completed
 
@@ -31,9 +26,9 @@ class TestMergeConf:
             return None
         
         if item.task.title == "Headline B2 modified":
-            return self.get_index(items, lambda item: item.task.title == "Headline B2")
+            return m.utils.get_index(items, lambda item: item.task.title == "Headline B2")
         if item.task.title == "Headline B3":
-            return self.get_index(items, lambda item: item.task.title == "Headline B3 original")
+            return m.utils.get_index(items, lambda item: item.task.title == "Headline B3 original")
 
         raise Exception("Undefined behavior")
 
@@ -51,7 +46,7 @@ class TestMergeConf:
         raise Exception(name, items)
         raise Exception("Undefined behavior")
 
-    def merge_notes(self, name, items):
+    def merge_notes(self, items):
         if items[0] == ['New B2 body text.']:
             return items[0]
 

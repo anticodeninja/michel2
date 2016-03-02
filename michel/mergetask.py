@@ -2,30 +2,6 @@ import datetime
 from difflib import SequenceMatcher
 from ipdb import set_trace
 
-class AutoMergeConf:
-
-    def __init__(self, todo_only):
-        self.todo_only = todo_only
-    
-    def is_needed(self, item):
-        if item.completed:
-            return False
-        
-        return not self.todo_only or item.todo
-
-    def select_best(self, item, items):
-        best_index_org = None
-        best_ratio = 0.8
-        
-        while index_org < len(tasks_org):
-            ratio = tasks_org[index_org].calc_ratio(tasks_remote[index_remote])
-            if ratio > best_ratio:
-                best_ratio = ratio
-                best_index_org = index_org
-            index_org += 1
-            
-        return 
-
 class PartTree:
     def __init__(self, parent, task):
         self.task = task
@@ -139,7 +115,7 @@ def treemerge(tree_org, tree_remote, conf):
         merge_attr(map_entry[0].task, map_entry[1].task, "title",
                    lambda a, b: conf.select_from("title", [a, b]), changes_list)
         merge_attr(map_entry[0].task, map_entry[1].task, "notes",
-                   lambda a, b: conf.merge_notes("notes", [a, b]), changes_list)
+                   lambda a, b: conf.merge_notes([a, b]), changes_list)
 
         if len(changes_list) > 0:
             if conf.is_needed(map_entry[0].task):

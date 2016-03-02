@@ -81,3 +81,9 @@ def save_data_path(file_name):
     if not os.path.exists(data_path):
         os.makedirs(data_path)
     return os.path.join(data_path, file_name)
+
+def get_index(items, pred):
+    for i, v in enumerate(items):
+        if pred(v):
+            return i
+    return None
