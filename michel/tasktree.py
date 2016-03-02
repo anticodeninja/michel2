@@ -7,7 +7,6 @@ from michel.utils import *
 
 headline_regex = re.compile("^(\*+) *(DONE|TODO)? *(.*)")
 timeline_regex = re.compile("(?:CLOSED: \[(.*)\]|(?:SCHEDULED: <(.*)>) *)+")
-systemline_regex = re.compile("([^.]+): (.+)")
 
 class TasksTree(object):
     """
@@ -22,7 +21,6 @@ class TasksTree(object):
 
     def __init__(self, title):
         self.title = title
-        self.prev_title = None
         self.subtasks = []
         self.notes = []
 
@@ -33,9 +31,6 @@ class TasksTree(object):
         self.scheduled_has_time = False
         self.scheduled_start_time = None
         self.scheduled_end_time = None
-
-        self.task_id = None
-        self.remote = False
         
     def __getitem__(self, key):
         return self.subtasks[key]
@@ -46,20 +41,36 @@ class TasksTree(object):
     def __delitem__(self, key):
         del(self.subtasks[key])
 
+    def __repr__(self):
+        return self.title
+
     def __len__(self):
         return len(self.subtasks)
 
-    def get_task_with_id(self, task_id):
-        """Returns the task of given id"""
-        if self.task_id == task_id:
-            return self
-        else:
-            # depth first search for id
-            for subtask in self.subtasks:
-                if subtask.get_task_with_id(task_id) is not None:
-                    return subtask.get_task_with_id(task_id)
-            # if there are no subtasks to search
-            return None
+    def update(self, todo=None, completed=None, notes=None, scheduled_has_time=None, scheduled_start_time=None, scheduled_end_time=None):
+        if todo is not None:
+            self.todo = todo
+            
+        if completed is not None:
+            self.todo = True
+            self.completed = completed
+
+        if notes is not None:
+            self.notes = notes
+
+        if completed and not self.closed_time:
+            self.closed_time = datetime.datetime.now()
+
+        if scheduled_has_time is not None:
+            self.scheduled_has_time = scheduled_has_time
+
+        if scheduled_start_time is not None:
+            self.scheduled_start_time = scheduled_start_time
+
+        if scheduled_end_time is not None:
+            self.scheduled_end_time = scheduled_end_time
+        
+        return self
 
     def add_subtask(self, title):
         """
@@ -67,7 +78,6 @@ class TasksTree(object):
         """
 
         task = TasksTree(title)
-        task.remote = self.remote
         self.subtasks.append(task)
         return task
 
@@ -83,25 +93,11 @@ class TasksTree(object):
             for match in matches:                
                 if len(match[0]) > 0:
                     note_string = False
-                    
-                    if not self.remote:
-                        _, self.closed_time, _ = from_emacs_date_format(match[0])
+                    _, self.closed_time, _ = from_emacs_date_format(match[0])
 
                 if len(match[1]) > 0:
                     note_string = False
-
-                    if not self.remote:
-                        self.scheduled_has_time, self.scheduled_start_time, self.scheduled_end_time = from_emacs_date_format(match[1])
-
-            matches = systemline_regex.findall(line)
-            if len(matches) > 0:
-                if matches[0][0] == "PREV_TITLE":
-                    note_string = False
-                    self.prev_title = matches[0][1]
-                elif matches[0][0] == "SYNC":
-                    note_string = not self.remote
-                else:
-                    note_string = False
+                    self.scheduled_has_time, self.scheduled_start_time, self.scheduled_end_time = from_emacs_date_format(match[1])
                     
             if note_string:
                 real_notes.append(line)
@@ -120,11 +116,6 @@ class TasksTree(object):
                 task_line.append('TODO')
             task_line.append(subtask.title)    
             res.append(' '.join(task_line))
-
-            if subtask.prev_title:
-                system_line = [' ' * (level + 1)]
-                system_line.append("PREV_TITLE: {0}".format(subtask.prev_title))
-                res.append(' '.join(system_line))
 
             time_line = [' ' * (level + 1)]
             if subtask.closed_time:
@@ -173,13 +164,12 @@ class TasksTree(object):
         file_text = "".join(file_lines)
         return TasksTree.parse_text(file_text)
     
-    def parse_text(text, remote = False):
+    def parse_text(text):
         """Parses an org-mode formatted block of text and returns a tree"""
         # create a (read-only) file object containing *text*
         f = io.StringIO(text)
     
         tasks_tree = TasksTree(None)
-        tasks_tree.remote = remote
     
         last_task = None
         task_stack = [tasks_tree]

@@ -2,32 +2,45 @@ import datetime
 from difflib import SequenceMatcher
 from ipdb import set_trace
 
-RATIO_THRESHOLD = 0.9
+class AutoMergeConf:
+
+    def __init__(self, todo_only):
+        self.todo_only = todo_only
+    
+    def is_needed(self, item):
+        if item.completed:
+            return False
+        
+        return not self.todo_only or item.todo
+
+    def select_best(self, item, items):
+        best_index_org = None
+        best_ratio = 0.8
+        
+        while index_org < len(tasks_org):
+            ratio = tasks_org[index_org].calc_ratio(tasks_remote[index_remote])
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_index_org = index_org
+            index_org += 1
+            
+        return 
 
 class PartTree:
     def __init__(self, parent, task):
         self.task = task
         self.parent = parent
+        
         self.hash_sum = 0
-        self.titles = []
-
-        if task.title is not None:
-            self.titles.append(task.title)
-        if task.prev_title is not None:
-            self.titles.append(task.prev_title)
-
-        for title in self.titles:
-            for char in title:
+        if self.task.title:
+            for char in self.task.title:
                 self.hash_sum += ord(char)
 
     def is_equal(self, another):
-        if len(self.titles) == 0 and len(another.titles) == 0:
-            return True
-        
-        return any(a == b for a in self.titles for b in another.titles)
+        return self.task.title == another.task.title
 
     def calc_ratio(self, another):
-        return max(self.__calc_ratio(a, b) for a in self.titles for b in another.titles)
+        return self.__calc_ratio(self.task.title, another.task.title)
 
     def __calc_ratio(self, str1, str2):
         if len(str1) == 0 and len(str2) == 0:
@@ -58,9 +71,22 @@ def disassemble_tree(tree, disassemblies, parent = None):
     for i in range(len(tree)):
         disassemble_tree(tree[i], disassemblies, current)
 
-def treemerge(tree_org, tree_remote):
+def merge_attr(task_remote, task_org, attr_name, merge_func, changes_list):
+    if getattr(task_remote, attr_name) != getattr(task_org, attr_name):
+        setattr(task_org, attr_name, merge_func(getattr(task_remote, attr_name), getattr(task_org, attr_name)))
+            
+    if getattr(task_remote, attr_name) != getattr(task_org, attr_name):
+        setattr(task_remote, attr_name, getattr(task_org, attr_name))
+        changes_list.append(attr_name)
+
+def copy_attr(task_dst, task_src):
+    for attr_name in ["notes", "todo", "completed", "closed_time", "scheduled_start_time", "scheduled_end_time"]:
+        setattr(task_dst, attr_name, getattr(task_src, attr_name))
+
+def treemerge(tree_org, tree_remote, conf):
     tasks_org = []
     tasks_remote = []
+    sync_plan = []
 
     disassemble_tree(tree_org, tasks_org)
     disassemble_tree(tree_remote, tasks_remote)
@@ -89,49 +115,46 @@ def treemerge(tree_org, tree_remote):
 
     # second step, fuzzy matching
     index_remote, index_org = 0, 0
-    while index_remote < len(tasks_remote):
-        index_org = 0
-        best_index_org = None
-        best_ratio = RATIO_THRESHOLD
-        
-        while index_org < len(tasks_org):
-            ratio = tasks_org[index_org].calc_ratio(tasks_remote[index_remote])
-            if ratio > best_ratio:
-                best_ratio = ratio
-                best_index_org = index_org
-            index_org += 1
+    while index_remote < len(tasks_remote) and len(tasks_org) > 0:
+        index_org = conf.select_best(tasks_remote[index_remote], tasks_org)
 
-        if best_index_org is not None:
-            mapping.append(tuple([tasks_remote.pop(index_remote), tasks_org.pop(best_index_org), False]))
+        if index_org is not None:
+            mapping.append(tuple([tasks_remote.pop(index_remote), tasks_org.pop(index_org), False]))
         else:
             index_remote += 1
 
     # third step, patching org tree
     for map_entry in mapping:
         diff_notes = []
+        changes_list = []
 
-        # Merge attributes
-        if map_entry[0].task.completed == True and map_entry[1].task.completed != True:
-            map_entry[1].task.completed = True
-            map_entry[1].task.closed_time = datetime.datetime.now()
+        merge_attr(map_entry[0].task, map_entry[1].task, "completed",
+                   lambda a, b: any([a, b]), changes_list)
+        merge_attr(map_entry[0].task, map_entry[1].task, "closed_time",
+                   lambda a, b: b or a, changes_list)
+        merge_attr(map_entry[0].task, map_entry[1].task, "scheduled_start_time",
+                   lambda a, b: conf.select_from("scheduled_start_time", [a, b]), changes_list)
+        merge_attr(map_entry[0].task, map_entry[1].task, "scheduled_end_time",
+                   lambda a, b: conf.select_from("scheduled_end_time", [a, b]), changes_list)
+        merge_attr(map_entry[0].task, map_entry[1].task, "title",
+                   lambda a, b: conf.select_from("title", [a, b]), changes_list)
+        merge_attr(map_entry[0].task, map_entry[1].task, "notes",
+                   lambda a, b: conf.merge_notes("notes", [a, b]), changes_list)
 
-        if map_entry[0].task.scheduled_start_time and not map_entry[1].task.scheduled_start_time:
-            map_entry[1].task.scheduled_start_time = map_entry[0].task.scheduled_start_time
+        if len(changes_list) > 0:
+            if conf.is_needed(map_entry[0].task):
+                sync_plan.append({
+                    "action": "update",
+                    "changes": changes_list,
+                    "item": map_entry[0].task
+                })
+            else:
+                sync_plan.append({
+                    "action": "remove",
+                    "item": map_entry[0].task
+                })
 
-        # Merge contents
-        if map_entry[0].task.title != map_entry[1].task.title:
-            if map_entry[1].task.title not in map_entry[0].titles:
-                map_entry[1].task.prev_title = map_entry[1].task.title
-                map_entry[1].task.title = map_entry[0].task.title
-
-        if map_entry[0].task.notes != map_entry[1].task.notes:
-            for note_line in map_entry[0].task.notes:
-                if note_line not in map_entry[1].task.notes:
-                    diff_notes.append("SYNC: {0}".format(note_line))
-
-        map_entry[1].task.notes += diff_notes
-
-    # fourth step, append new items
+    # fourth step, append new items to org tree
     for i in range(len(tasks_remote)):
         new_task = tasks_remote[i]
 
@@ -139,12 +162,34 @@ def treemerge(tree_org, tree_remote):
             parent_task = next(x for x in mapping if x[0] == new_task.parent)[1].task
         except StopIteration:
             parent_task = tree_org
-            new_task.task.notes.append("MERGE_INFO: parent is not exist")
 
         created_task = parent_task.add_subtask(new_task.task.title)
-        created_task.notes = new_task.task.notes
-        created_task.todo = new_task.task.todo
-        created_task.completed = new_task.task.completed
-        created_task.scheduled_start_time = new_task.task.scheduled_start_time
+        copy_attr(created_task, new_task.task)
 
-        mapping.append(tuple([PartTree(parent_task, created_task), new_task, True]))
+        if not conf.is_needed(new_task.task):
+            sync_plan.append({
+                "action": "remove",
+                "item": new_task.task
+            })
+
+    # fifth step, append new items to remote tree
+    for i in range(len(tasks_org)):
+        new_task = tasks_org[i]
+
+        try:
+            parent_task = next(x for x in mapping if x[1] == new_task.parent)[0].task
+        except StopIteration:
+            parent_task = tree_remote
+
+        if not conf.is_needed(new_task.task):
+            continue
+
+        created_task = parent_task.add_subtask(new_task.task.title)
+        copy_attr(created_task, new_task.task)
+
+        sync_plan.append({
+            "action": "append",
+            "item": new_task.task
+        })
+
+    return sync_plan
