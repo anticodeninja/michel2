@@ -14,16 +14,16 @@ import locale
 import michel as m
 from tests import getLocaleAlias
 
+@unittest.skipUnless(os.getenv('MANUAL_TESTING'), 'Enable only for manual-testing')
 class TestInteractiveMerge(unittest.TestCase):
 
-    @unittest.skip
     def test_selectbest(self):        
         conf = m.InteractiveMergeConf(True)
         tasks = [m.TasksTree('Headline A modified'), m.TasksTree('Headline B')]
         self.assertEqual(conf.select_best(m.TasksTree('Headline A'), tasks), 0)
-        self.assertEqual(conf.select_best(m.TasksTree('Headline C'), tasks), None)
+        self.assertEqual(conf.select_best(m.TasksTree('Headline C'), tasks), 'new')
+        self.assertEqual(conf.select_best(m.TasksTree('Discard it'), tasks), 'discard')
 
-    @unittest.skip
     def test_selectfrom(self):        
         conf = m.InteractiveMergeConf(True)
         self.assertEqual(conf.select_from("title", [
@@ -37,7 +37,6 @@ class TestInteractiveMerge(unittest.TestCase):
             datetime.datetime(2015, 12, 10, tzinfo = m.LocalTzInfo())
         ]), datetime.datetime(2015, 12, 10, tzinfo = m.LocalTzInfo()))
 
-    @unittest.skip
     def test_mergenotes(self):        
         conf = m.InteractiveMergeConf(True)
         self.assertEqual(conf.merge_notes([

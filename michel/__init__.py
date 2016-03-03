@@ -59,10 +59,8 @@ def sync_todolist(path, profile, list_name, only_todo):
     gtask_provider.pull()
     tree_org = TasksTree.parse_file(path)
     
-    treemerge(tree_org, gtask_provider.get_tasks())
-
-    gtask_provider.set_tasks(tree_org)
-    gtask_provider.push()
+    sync_plan = treemerge(tree_org, gtask_provider.get_tasks(), InteractiveMergeConf(only_todo))
+    gtask_provider.sync(sync_plan)
     codecs.open(path, "w", "utf-8").write(str(tree_org))
 
 def main():
@@ -79,8 +77,8 @@ def main():
     action.add_argument("--list", action='store_true',
             help='use action from list.')
     
-    parser.add_argument("--todo", action='store_true',
-            help='synchronize even not TODO tasks to remote.')
+    parser.add_argument("--only_todo", action='store_true',
+            help='synchronize only TODO tasks to remote.')
     
     parser.add_argument('--orgfile',
             metavar='FILE',
@@ -105,7 +103,7 @@ def main():
         parser.error('--orgfile must be specified when using --push')
     if args.sync and not args.orgfile:
         parser.error('--orgfile must be specified when using --sync')
-    if args.todo and not (args.push or args.sync):
+    if args.only_todo and not (args.push or args.sync):
         parser.error('--todo can be specified only with using --sync or --push')
     
     if args.pull:
@@ -117,12 +115,12 @@ def main():
         if not os.path.exists(args.orgfile):
             print("The org-file you want to push does not exist.")
             sys.exit(2)
-        push_todolist(args.orgfile, args.profile, args.listname, args.todo)
+        push_todolist(args.orgfile, args.profile, args.listname, args.only_todo)
     elif args.sync:
         if not os.path.exists(args.orgfile):
             print("The org-file you want to synchronize does not exist.")
             sys.exit(2)
-        sync_todolist(args.orgfile, args.profile, args.listname, args.todo)
+        sync_todolist(args.orgfile, args.profile, args.listname, args.only_todo)
     elif args.list:
         print("Use list of actions")
         with codecs.open(MICHEL_PROFILE, 'r', 'utf-8') as actions_file:
@@ -130,10 +128,10 @@ def main():
         for entry in actions:
             if entry['action'] == 'sync':
                 print ("Sync {0} <-> {1}:{2}".format(entry['org_file'], entry['profile'], entry['listname']))
-                sync_todolist(entry['org_file'], entry['profile'], entry['listname'], entry['todo'])
+                sync_todolist(entry['org_file'], entry['profile'], entry['listname'], entry['only_todo'])
             elif entry['action'] == 'push':
                 print ("Push {0} -> {1}:{2}".format(entry['org_file'], entry['profile'], entry['listname']))
-                push_todolist(entry['org_file'], entry['profile'], entry['listname'], entry['todo'])
+                push_todolist(entry['org_file'], entry['profile'], entry['listname'], entry['only_todo'])
             elif entry['action'] == 'pull':
                 print ("Pull {0} <- {1}:{2}".format(entry['org_file'], entry['profile'], entry['listname']))
                 write_todolist(entry['org_file'], entry['profile'], entry['listname'])

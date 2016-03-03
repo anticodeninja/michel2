@@ -92,39 +92,50 @@ def treemerge(tree_org, tree_remote, conf):
     # second step, fuzzy matching
     index_remote, index_org = 0, 0
     while index_remote < len(tasks_remote) and len(tasks_org) > 0:
-        index_org = conf.select_best(tasks_remote[index_remote], tasks_org)
+        index_org = conf.select_best(tasks_remote[index_remote].task, (x.task for x in tasks_org))
 
-        if index_org is not None:
+        if index_org == 'discard':
+            tasks_remote[index_remote].task.completed = True
+        elif index_org != 'new':
             mapping.append(tuple([tasks_remote.pop(index_remote), tasks_org.pop(index_org), False]))
-        else:
-            index_remote += 1
+            continue
+
+        index_remote += 1
 
     # third step, patching org tree
     for map_entry in mapping:
         diff_notes = []
         changes_list = []
 
-        merge_attr(map_entry[0].task, map_entry[1].task, "completed",
-                   lambda a, b: any([a, b]), changes_list)
-        merge_attr(map_entry[0].task, map_entry[1].task, "closed_time",
-                   lambda a, b: b or a, changes_list)
-        merge_attr(map_entry[0].task, map_entry[1].task, "scheduled_start_time",
-                   lambda a, b: conf.select_from("scheduled_start_time", [a, b]), changes_list)
-        merge_attr(map_entry[0].task, map_entry[1].task, "scheduled_end_time",
-                   lambda a, b: conf.select_from("scheduled_end_time", [a, b]), changes_list)
         merge_attr(map_entry[0].task, map_entry[1].task, "title",
                    lambda a, b: conf.select_from("title", [a, b]), changes_list)
         merge_attr(map_entry[0].task, map_entry[1].task, "notes",
                    lambda a, b: conf.merge_notes([a, b]), changes_list)
+        merge_attr(map_entry[0].task, map_entry[1].task, "completed",
+                   lambda a, b: any([a, b]), changes_list)
+        merge_attr(map_entry[0].task, map_entry[1].task, "scheduled_start_time",
+                   lambda a, b: conf.select_from("{0}\scheduled_start_time".format(map_entry[0].task.title), [a, b]), changes_list)
+        merge_attr(map_entry[0].task, map_entry[1].task, "scheduled_end_time",
+                   lambda a, b: conf.select_from("{0}\scheduled_end_time".format(map_entry[0].task.title), [a, b]), changes_list)
 
-        if len(changes_list) > 0:
-            if conf.is_needed(map_entry[0].task):
+        if map_entry[0].task.completed:
+            map_entry[1].task.closed_time = map_entry[0].task.closed_time or map_entry[1].task.closed_time
+            if map_entry[0].task.closed_time != map_entry[1].task.closed_time:
+                changes_list.append("closed_time")
+                map_entry[0].task.closed_time = map_entry[1].task.closed_time
+        else:
+            map_entry[0].task.closed_time = None
+            map_entry[1].task.closed_time = None
+
+        if conf.is_needed(map_entry[0].task):
+            if len(changes_list) > 0:
                 sync_plan.append({
                     "action": "update",
                     "changes": changes_list,
                     "item": map_entry[0].task
                 })
-            else:
+        else:
+            if map_entry[0].task.title is not None:
                 sync_plan.append({
                     "action": "remove",
                     "item": map_entry[0].task
@@ -152,20 +163,20 @@ def treemerge(tree_org, tree_remote, conf):
     for i in range(len(tasks_org)):
         new_task = tasks_org[i]
 
+        if not conf.is_needed(new_task.task):
+            continue
+
         try:
             parent_task = next(x for x in mapping if x[1] == new_task.parent)[0].task
         except StopIteration:
             parent_task = tree_remote
-
-        if not conf.is_needed(new_task.task):
-            continue
 
         created_task = parent_task.add_subtask(new_task.task.title)
         copy_attr(created_task, new_task.task)
 
         sync_plan.append({
             "action": "append",
-            "item": new_task.task
+            "item": created_task
         })
 
     return sync_plan

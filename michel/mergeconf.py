@@ -15,7 +15,13 @@ class InteractiveMergeConf:
         self.todo_only = todo_only
                 
     def is_needed(self, item):
-        return (item.todo or not self.todo_only) and not item.completed
+        if item.completed:
+            return False
+
+        if self.todo_only:
+            return item.todo
+        
+        return True
 
     def select_best(self, item, items):
         print("\"{0}\" has not exact mapping in your local org-tree.".format(item.title))
@@ -24,12 +30,15 @@ class InteractiveMergeConf:
         while True:
             for i, v in enumerate(items):
                 print("[{0}] {1}".format(i, v.title))
-            print("[-] -- Not existed")
+            print("[n] -- create new")
+            print("[d] -- discard new")
 
             result = input()
             try:
-                if result == '-':
-                    return None
+                if result == 'n':
+                    return 'new'
+                if result == 'd':
+                    return 'discard'
 
                 result = int(result)
                 if result >= 0 and result <= i:

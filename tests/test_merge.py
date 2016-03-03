@@ -1,3 +1,4 @@
+import pdb; pdb.set_trace();
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
@@ -20,15 +21,15 @@ class TestMergeConf:
         return item.todo and not item.completed
 
     def select_best(self, item, items):
-        if (item.task.title == "Headline A1.1") or\
-           (item.task.title == "Headline G") or\
-           (item.task.title == "Headline H"):
-            return None
+        if (item.title == "Headline A1.1") or\
+           (item.title == "Headline G") or\
+           (item.title == "Headline H"):
+            return 'new'
         
-        if item.task.title == "Headline B2 modified":
-            return m.utils.get_index(items, lambda item: item.task.title == "Headline B2")
-        if item.task.title == "Headline B3":
-            return m.utils.get_index(items, lambda item: item.task.title == "Headline B3 original")
+        if item.title == "Headline B2 modified":
+            return m.utils.get_index(items, lambda item: item.title == "Headline B2")
+        if item.title == "Headline B3":
+            return m.utils.get_index(items, lambda item: item.title == "Headline B3 original")
 
         raise Exception("Undefined behavior")
 
@@ -185,8 +186,13 @@ class TestMichel(unittest.TestCase):
 
         remote_sync_plan = m.treemerge(org_tree, remote_tree, TestMergeConf())
 
+        print(remote_sync_plan)
         self.assertEqual(str(org_tree), result_text)
-        self.assertEqual(len(remote_sync_plan), 5)
+        self.assertEqual(len(remote_sync_plan), 7)
+
+        # Headline B1
+        assertObj = next(x for x in remote_sync_plan if x['item'] == remote_tasks[0])
+        self.assertEqual(assertObj['action'], 'remove')
 
         # Headline B2
         assertObj = next(x for x in remote_sync_plan if x['item'] == remote_tasks[1])
@@ -197,6 +203,10 @@ class TestMichel(unittest.TestCase):
         self.assertEqual(assertObj['action'], 'update')
         self.assertEqual(assertObj['changes'], ['title'])
         self.assertEqual(assertObj['item'].title, 'Headline B3 original')
+
+        # Headline C
+        assertObj = next(x for x in remote_sync_plan if x['item'] == remote_tasks[3])
+        self.assertEqual(assertObj['action'], 'remove')
 
         # Headline D1
         assertObj = next(x for x in remote_sync_plan if x['item'] == remote_tasks[4])

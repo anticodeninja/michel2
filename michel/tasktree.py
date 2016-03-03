@@ -1,3 +1,4 @@
+import pdb; pdb.set_trace();
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
@@ -18,7 +19,6 @@ class TasksTree(object):
     A TasksTree:
     - is a task (except the root, which just holds the list)
     - has subtasks
-    - may have a task_id
     - may have a title
     """
 
@@ -45,7 +45,7 @@ class TasksTree(object):
         del(self.subtasks[key])
 
     def __repr__(self):
-        return self.title
+        return self.title or "<empty>"
 
     def __len__(self):
         return len(self.subtasks)
@@ -83,6 +83,23 @@ class TasksTree(object):
         task = TasksTree(title)
         self.subtasks.append(task)
         return task
+
+    def remove_subtask(self, task):
+        """
+        Remove the subtask from the tree
+        """
+
+        self.subtasks.remove(task)
+        return task
+
+    def find_parent(self, task):
+        for item in self:
+            if item == task:
+                return self
+            else:
+                result = item.find_parent(task)
+                if result is not None:
+                    return result
 
     def parse_system_notes(self):
         for subtask in self.subtasks:
