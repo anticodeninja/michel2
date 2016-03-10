@@ -14,10 +14,10 @@ sys_regex = re.compile(":PARENT: (.*)")
 
 class GTaskProvider:
 
-    def __init__(self, profile_name, list_name, conf):
+    def __init__(self, profile_name, list_name, only_todo):
         self.__profile_name = profile_name
         self.__list_name = list_name
-        self.__conf = conf
+        self.__only_todo = only_todo
         
         self.__tasks_tree = None
         self.__task_id_map = None
@@ -25,6 +25,14 @@ class GTaskProvider:
         
         self.__init_service()
 
+    def is_needed(self, default, item):
+        if item.completed:
+            return False
+
+        if self.__only_todo:
+            return item.todo
+
+        return default(item)
 
     def get_tasks(self):
         return self.__tasks_tree

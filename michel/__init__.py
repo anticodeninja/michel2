@@ -57,7 +57,7 @@ def sync_todolist(path, profile, list_name, only_todo):
     gtask_provider.pull()
     tree_org = TasksTree.parse_file(path)
     
-    sync_plan = treemerge(tree_org, gtask_provider.get_tasks(), InteractiveMergeConf(only_todo))
+    sync_plan = treemerge(tree_org, gtask_provider.get_tasks(), InteractiveMergeConf(gtask_provider))
     gtask_provider.sync(sync_plan)
     codecs.open(path, "w", "utf-8").write(str(tree_org))
 

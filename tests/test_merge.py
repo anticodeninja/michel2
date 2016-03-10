@@ -32,23 +32,34 @@ class TestMergeConf:
 
         raise Exception("Undefined behavior")
 
-    def select_from(self, name, items):
-        if name == "title":
-            if items[0] == "Headline B2 modified":
-                return items[0]
-            if items[0] == "Headline B3":
-                return items[1]
+    def merge_title(self, task1, task2):
+        if task1.title == "Headline B2 modified":
+            return task1.title
+        if task1.title == "Headline B3":
+            return task2.title
 
+    def merge_completed(self, task1, task2):
+        return task1.completed or task2.completed
+
+    def merge_closed_time(self, task_remote, task_org):
+        return self.__select_from([task_remote.closed_time, task_org.closed_time])
+
+    def merge_scheduled_start_time(self, task_remote, task_org):
+        return self.__select_from([task_remote.scheduled_start_time, task_org.scheduled_start_time])
+
+    def merge_scheduled_end_time(self, task_remote, task_org):
+        return self.__select_from([task_remote.scheduled_end_time, task_org.scheduled_end_time])
+
+    def __select_from(self, items):        
         items = [x for x in items if x is not None]
         if len(items) == 1:
             return items[0]
 
-        raise Exception(name, items)
         raise Exception("Undefined behavior")
 
-    def merge_notes(self, items):
-        if items[0] == ['New B2 body text.']:
-            return items[0]
+    def merge_notes(self, task1, task2):
+        if task1.notes == ['New B2 body text.']:
+            return task1.notes
 
         raise Exception("Undefined behavior")
 

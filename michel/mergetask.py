@@ -51,7 +51,7 @@ def disassemble_tree(tree, disassemblies, parent = None):
 
 def merge_attr(task_remote, task_org, attr_name, merge_func, changes_list):
     if getattr(task_remote, attr_name) != getattr(task_org, attr_name):
-        setattr(task_org, attr_name, merge_func(getattr(task_remote, attr_name), getattr(task_org, attr_name)))
+        setattr(task_org, attr_name, merge_func(task_remote, task_org))
             
     if getattr(task_remote, attr_name) != getattr(task_org, attr_name):
         setattr(task_remote, attr_name, getattr(task_org, attr_name))
@@ -110,24 +110,17 @@ def treemerge(tree_org, tree_remote, conf):
         changes_list = []
 
         merge_attr(map_entry[0].task, map_entry[1].task, "title",
-                   lambda a, b: conf.select_from("title", [a, b]), changes_list)
-        merge_attr(map_entry[0].task, map_entry[1].task, "notes",
-                   lambda a, b: conf.merge_notes([a, b]), changes_list)
+                   lambda a, b: conf.merge_title(a, b), changes_list)
         merge_attr(map_entry[0].task, map_entry[1].task, "completed",
-                   lambda a, b: any([a, b]), changes_list)
+                   lambda a, b: conf.merge_completed(a, b), changes_list)
+        merge_attr(map_entry[0].task, map_entry[1].task, "closed_time",
+                   lambda a, b: conf.merge_closed_time(a, b), changes_list)
         merge_attr(map_entry[0].task, map_entry[1].task, "scheduled_start_time",
-                   lambda a, b: conf.select_from("{0}\scheduled_start_time".format(map_entry[0].task.title), [a, b]), changes_list)
+                   lambda a, b: conf.merge_scheduled_start_time(a, b), changes_list)
         merge_attr(map_entry[0].task, map_entry[1].task, "scheduled_end_time",
-                   lambda a, b: conf.select_from("{0}\scheduled_end_time".format(map_entry[0].task.title), [a, b]), changes_list)
-
-        if map_entry[0].task.completed:
-            map_entry[1].task.closed_time = map_entry[0].task.closed_time or map_entry[1].task.closed_time
-            if map_entry[0].task.closed_time != map_entry[1].task.closed_time:
-                changes_list.append("closed_time")
-                map_entry[0].task.closed_time = map_entry[1].task.closed_time
-        else:
-            map_entry[0].task.closed_time = None
-            map_entry[1].task.closed_time = None
+                   lambda a, b: conf.merge_scheduled_end_time(a, b), changes_list)
+        merge_attr(map_entry[0].task, map_entry[1].task, "notes",
+                   lambda a, b: conf.merge_notes(a, b), changes_list)
 
         if conf.is_needed(map_entry[0].task):
             if len(changes_list) > 0:
