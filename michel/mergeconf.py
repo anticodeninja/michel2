@@ -24,14 +24,14 @@ class InteractiveMergeConf:
         return True
 
     def select_best(self, item, items):
-        print("\"{0}\" has not exact mapping in your local org-tree.".format(item.title))
-        print("Please manualy choose necessary item:")
+        uprint("\"{0}\" has not exact mapping in your local org-tree.".format(item.title))
+        uprint("Please manualy choose necessary item:")
         
         while True:
             for i, v in enumerate(items):
-                print("[{0}] {1}".format(i, v.title))
-            print("[n] -- create new")
-            print("[d] -- discard new")
+                uprint("[{0}] {1}".format(i, v.title))
+            uprint("[n] -- create new")
+            uprint("[d] -- discard new")
 
             result = input()
             try:
@@ -46,16 +46,16 @@ class InteractiveMergeConf:
             except:
                 pass
 
-            print("Incorrect input!")
+            uprint("Incorrect input!")
 
 
     def select_from(self, name, items):
-        print("Attribute \"{0}\" has different values for different items.".format(name))
-        print("Please manualy choose necessary value:")
+        uprint("Attribute \"{0}\" has different values for different items.".format(name))
+        uprint("Please manualy choose necessary value:")
         
         while True:
             for i, v in enumerate(items):
-                print("[{0}] {1}".format(i, v))
+                uprint("[{0}] {1}".format(i, v))
 
             result = input()
             try:
@@ -63,23 +63,23 @@ class InteractiveMergeConf:
                 if result >= 0 and result <= i:
                     return items[result]
             except Exception as e:
-                print(e)
+                uprint(e)
 
-            print("Incorrect input!")
+            uprint("Incorrect input!")
 
     def merge_notes(self, items):
-        print("Notes are different values for different items.")
-        print("Please manualy choose necessary:")
+        uprint("Notes are different values for different items.")
+        uprint("Please manualy choose necessary:")
         
         while True:
             for i, v in enumerate(items):
-                print("[{0}] Use this block:".format(i))
+                uprint("[{0}] Use this block:".format(i))
                 for line in v:
-                    print(line)
-                print("-------------------------------------")
-                print()
+                    uprint(line)
+                uprint("-------------------------------------")
+                uprint()
 
-            print("[e] Edit in external editor")
+            uprint("[e] Edit in external editor")
             
             result = input()
             try:
@@ -90,9 +90,9 @@ class InteractiveMergeConf:
                 if result >= 0 and result <= i:
                     return items[result]
             except Exception as e:
-                print(e)
+                uprint(e)
 
-            print("Incorrect input!")
+            uprint("Incorrect input!")
 
         # External editor
         temp_fid, temp_name = tempfile.mkstemp()
@@ -110,7 +110,7 @@ class InteractiveMergeConf:
             with codecs.open(temp_name, "r", encoding="utf-8") as temp_file:
                 result = [x.strip() for x in temp_file.readlines()]
         except Exception as e:
-            print(e)
+            uprint(e)
             
         os.close(temp_fid)
         os.remove(temp_name)

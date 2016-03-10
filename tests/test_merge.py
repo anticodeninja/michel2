@@ -1,4 +1,3 @@
-import pdb; pdb.set_trace();
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
@@ -186,7 +185,6 @@ class TestMichel(unittest.TestCase):
 
         remote_sync_plan = m.treemerge(org_tree, remote_tree, TestMergeConf())
 
-        print(remote_sync_plan)
         self.assertEqual(str(org_tree), result_text)
         self.assertEqual(len(remote_sync_plan), 7)
 

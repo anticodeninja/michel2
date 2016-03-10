@@ -10,8 +10,10 @@ import os
 import tempfile
 import datetime
 import locale
+import sys
 
 import michel as m
+from michel.utils import *
 from tests import getLocaleAlias
 
 class TestMichel(unittest.TestCase):
@@ -59,7 +61,6 @@ class TestMichel(unittest.TestCase):
                     True,
                     datetime.datetime(2015, 12, 10, 3, 25)))
 
-    @unittest.skipIf(os.name == 'nt', "unicode console is not supported")
     def test_unicode_print(self):
         """
         Test ability to print unicode text
@@ -69,14 +70,12 @@ class TestMichel(unittest.TestCase):
         task = tasks_tree.add_subtask('السلام عليكم')
         task.notes = ['viele Grüße']
 
-        old_stdout = sys.stdout
-        sys.stdout = open(os.devnull, 'w')
+        test_stdout = open(os.devnull, 'w')
         try:
-            print(tasks_tree)
+            uprint(tasks_tree, file=test_stdout)
         except UnicodeDecodeError:
             self.fail("TasksTree._print() raised UnicodeDecodeError")
-        sys.stdout.close()
-        sys.stdout = old_stdout
+        test_stdout.close()
 
         
     def test_unicode_dump_to_file(self):

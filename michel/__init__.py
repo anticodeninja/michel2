@@ -3,14 +3,12 @@
 """
 michel-orgmode -- a script to push/pull an org-mode text file to/from a google
                   tasks list.
-
 """
 
 import codecs
 import os.path
 import shutil
 import sys
-import ipdb
 import json
 import locale
 

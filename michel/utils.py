@@ -1,8 +1,12 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import datetime
 import time
 import os
 import locale
 import re
+import sys
 
 default_locale = locale.setlocale(locale.LC_TIME, '')
 locale.setlocale(locale.LC_TIME, 'C')
@@ -87,3 +91,11 @@ def get_index(items, pred):
         if pred(v):
             return i
     return None
+
+def uprint(*objects, sep=' ', end='\n', file=sys.stdout):
+    enc = file.encoding
+    if enc == 'UTF-8':
+        print(*objects, sep=sep, end=end, file=file)
+    else:
+        f = lambda obj: str(obj).encode(enc, errors='backslashreplace').decode(enc)
+        print(*map(f, objects), sep=sep, end=end, file=file)

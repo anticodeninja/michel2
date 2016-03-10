@@ -1,6 +1,8 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import datetime
 from difflib import SequenceMatcher
-from ipdb import set_trace
 
 class PartTree:
     def __init__(self, parent, task):
