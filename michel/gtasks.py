@@ -34,6 +34,26 @@ class GTaskProvider:
 
         return default(item)
 
+    def merge_scheduled_start_time(self, default, task_remote, task_org):
+        r_time = task_remote.scheduled_start_time
+        o_time = task_org.scheduled_start_time
+        
+        if r_time.year == o_time.year and r_time.month == o_time.month and r_time.day == o_time.day:
+            task_remote.scheduled_start_time = o_time
+            return o_time
+
+        return default(task_remote, task_org)
+
+    def merge_scheduled_end_time(self, default, task_remote, task_org):
+        r_time = task_remote.scheduled_start_time
+        o_time = task_org.scheduled_end_time
+        
+        if r_time.year == o_time.year and r_time.month == o_time.month and r_time.day == o_time.day:
+            task_remote.scheduled_end_time = o_time
+            return o_time
+
+        return default(task_remote, task_org)
+
     def get_tasks(self):
         return self.__tasks_tree
 
