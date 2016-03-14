@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import datetime
-from difflib import SequenceMatcher
 
 class PartTree:
     def __init__(self, parent, task):
@@ -16,25 +15,6 @@ class PartTree:
 
     def is_equal(self, another):
         return self.task.title == another.task.title
-
-    def calc_ratio(self, another):
-        return self.__calc_ratio(self.task.title, another.task.title)
-
-    def __calc_ratio(self, str1, str2):
-        if len(str1) == 0 and len(str2) == 0:
-            return 1
-        
-        seq = SequenceMatcher(None, str1, str2)
-        ratio = 0
-        
-        for opcode in seq.get_opcodes():
-            if opcode[0] == 'equal' or opcode[0] == 'insert':
-                continue
-            if opcode[0] == 'delete':
-                ratio += opcode[2] - opcode[1]
-            if opcode[0] == 'replace':
-                ratio += max(opcode[4] - opcode[3], opcode[2] - opcode[1])
-        return 1 - ratio/max(len(str1), len(str2))
 
     def __str__(self):
         return "{0} {1}, p: {2}".format(self.task.title, self.hash_sum, self.parent)
@@ -94,7 +74,7 @@ def treemerge(tree_org, tree_remote, conf):
     # second step, fuzzy matching
     index_remote, index_org = 0, 0
     while index_remote < len(tasks_remote) and len(tasks_org) > 0:
-        index_org = conf.select_best(tasks_remote[index_remote].task, (x.task for x in tasks_org))
+        index_org = conf.select_org_task(tasks_remote[index_remote].task, (x.task for x in tasks_org))
 
         if index_org == 'discard':
             tasks_remote[index_remote].task.completed = True

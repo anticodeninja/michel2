@@ -7,6 +7,7 @@ import io
 import datetime
 import subprocess
 import tempfile
+import difflib
 
 from michel.utils import *
 
@@ -62,27 +63,40 @@ class InteractiveMergeConf:
     def __select_org_task(self, task_remote, tasks_org):        
         uprint("\"{0}\" has not exact mapping in your local org-tree.".format(task_remote.title))
         uprint("Please manualy choose necessary item:")
-    
+
+        items = [[i, v, difflib.SequenceMatcher(a=task_remote.title, b=v.title).ratio()]
+                 for i, v in enumerate(tasks_org)]
+        items.sort(key=lambda v: v[2], reverse=True)
+        items_count = len(items)
+        items_count_for_showing = 10
+        
         while True:
-            for i, v in enumerate(tasks_org):
-                uprint("[{0}] {1}".format(i, v.title))
-                uprint("[n] -- create new")
-                uprint("[d] -- discard new")
+            for i in range(min(items_count, items_count_for_showing)):
+                uprint("[{0}] {1}".format(i, items[i][1].title))
+                
+            if items_count > items_count_for_showing:
+                uprint("[m] ...")
+            
+            uprint("[n] -- create new")
+            uprint("[d] -- discard new")
 
-                result = input()
-                try:
-                    if result == 'n':
-                        return 'new'
-                    if result == 'd':
-                        return 'discard'
+            result = input()
+            try:
+                if result == 'm':
+                    items_count_for_showing = items_count
+                    continue
+                elif result == 'n':
+                    return 'new'
+                elif result == 'd':
+                    return 'discard'
 
-                    result = int(result)
-                    if result >= 0 and result <= i:
-                        return result
-                except:
-                    pass
+                result = int(result)
+                if result >= 0 and result <= items_count:
+                    return items[result][0]
+            except:
+                pass
 
-        uprint("Incorrect input!")
+            uprint("Incorrect input!")
 
     def __merge_title(self, task_remote, task_org):
         uprint("Tasks has different titles")
