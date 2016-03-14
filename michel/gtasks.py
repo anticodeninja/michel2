@@ -68,8 +68,6 @@ class GTaskProvider:
             
 
     def sync(self, sync_plan):
-        print(sync_plan)
-
         for item in sync_plan:
             task = item['item']            
             if item['action'] == 'append':
@@ -93,10 +91,10 @@ class GTaskProvider:
                 }
                 
                 if task.closed_time is not None:
-                    gtask['completed'] = task.closed_time.astimezone().isoformat()
+                    gtask['completed'] = to_google_date_format(task.closed_time)
                 
                 if task.scheduled_start_time is not None:
-                    gtask['due'] = task.scheduled_start_time.astimezone().isoformat()
+                    gtask['due'] = to_google_date_format(task.scheduled_start_time)
 
                 res = self.__service.tasks().insert(
                     tasklist=self.__list_id,
@@ -115,18 +113,16 @@ class GTaskProvider:
                 if 'completed' in item['changes']:
                     if task.completed:
                         gtask['status'] = 'completed'
-                        gtask['completed'] = task.closed_time.astimezone().isoformat()
+                        gtask['completed'] = to_google_date_format(task.closed_time)
                     else:
                         gtask['status'] = 'needsAction'
                         gtask['completed'] = None
                 if 'scheduled_start_time' in item['changes']:
-                    gtask['due'] = task.scheduled_start_time.astimezone().isoformat()
+                    gtask['due'] = to_google_date_format(task.scheduled_start_time)
 
                 if len(gtask) == 0:
                     continue
 
-                print(gtask)
-                
                 self.__service.tasks().patch(
                     tasklist=self.__list_id,
                     task=self.__task_id_map[task],
