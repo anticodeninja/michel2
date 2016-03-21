@@ -37,8 +37,8 @@ class GTaskProvider:
     def merge_scheduled_start_time(self, default, task_remote, task_org):
         r_time = task_remote.scheduled_start_time
         o_time = task_org.scheduled_start_time
-        
-        if r_time.year == o_time.year and r_time.month == o_time.month and r_time.day == o_time.day:
+
+        if r_time and o_time and r_time.year == o_time.year and r_time.month == o_time.month and r_time.day == o_time.day:
             task_remote.scheduled_start_time = o_time
             return o_time
 

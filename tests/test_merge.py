@@ -19,7 +19,7 @@ class TestMergeConf:
     def is_needed(self, item):
         return item.todo and not item.completed
 
-    def select_best(self, item, items):
+    def select_org_task(self, item, items):
         if (item.title == "Headline A1.1") or\
            (item.title == "Headline G") or\
            (item.title == "Headline H"):
