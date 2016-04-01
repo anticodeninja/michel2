@@ -15,8 +15,8 @@ google_time_regex = re.compile("(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+).+")
 emacs_time_regex = re.compile("(\d+)-(\d+)-(\d+) \S+(?: (\d+):(\d+)(?:-(\d+):(\d+))?)?")
 
 class LocalTzInfo(datetime.tzinfo):
-    _offset = datetime.timedelta(seconds = time.timezone)
-    _dst = datetime.timedelta(seconds = time.daylight)
+    _offset = datetime.timedelta(seconds = -time.timezone)
+    _dst = datetime.timedelta(seconds = time.altzone -time.timezone) if time.daylight else 0
     _name = time.tzname
     def utcoffset(self, dt):
         return self.__class__._offset
