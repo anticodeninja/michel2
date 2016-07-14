@@ -16,8 +16,6 @@ from michel.utils import *
 from michel.gtasks import *
 from michel.mergetask import *
 from michel.mergeconf import *
-
-MICHEL_PROFILE = ".michel-profile"
         
 def print_todolist(profile, list_name=None):
     """Print an orgmode-formatted string representing a google tasks list.
@@ -31,7 +29,7 @@ def print_todolist(profile, list_name=None):
     gtask_provider.pull()
     print(gtask_provider.get_tasks())
 
-def write_todolist(orgfile_path, profile, list_name=None):
+def write_todolist(path, profile, list_name=None):
     """Create an orgmode-formatted file representing a google tasks list.
     
     The Google Tasks list named *list_name* is used.  If *list_name* is not
@@ -39,12 +37,22 @@ def write_todolist(orgfile_path, profile, list_name=None):
     
     """
 
+    path = os.path.expanduser(path)
+    if not os.path.exists(path):
+        print("The org-file you want to synchronize does not exist.")
+        sys.exit(2)
+
     gtask_provider = GTaskProvider(profile, list_name)
     gtask_provider.pull()
-    gtask_provider.get_tasks().write_file(orgfile_path)
+    gtask_provider.get_tasks().write_file(path)
 
 def push_todolist(path, profile, list_name, only_todo):
     """Pushes the specified file to the specified todolist"""
+
+    path = os.path.expanduser(path)
+    if not os.path.exists(path):
+        print("The org-file you want to synchronize does not exist.")
+        sys.exit(2)
 
     gtask_provider = GTaskProvider(profile, list_name, only_todo)
     gtask_provider.set_tasks(TasksTree.parse_file(path))
@@ -52,6 +60,11 @@ def push_todolist(path, profile, list_name, only_todo):
 
 def sync_todolist(path, profile, list_name, only_todo):
     """Synchronizes the specified file with the specified todolist"""
+
+    path = os.path.expanduser(path)
+    if not os.path.exists(path):
+        print("The org-file you want to synchronize does not exist.")
+        sys.exit(2)
 
     gtask_provider = GTaskProvider(profile, list_name, only_todo)
     gtask_provider.pull()
@@ -72,8 +85,8 @@ def main():
             help='replace FILE with the contents of LISTNAME.')
     action.add_argument("--sync", action='store_true',
             help='synchronize changes between FILE and LISTNAME.')
-    action.add_argument("--list", action='store_true',
-            help='use action from list.')
+    action.add_argument("--script", action='store_true',
+            help='use action from script.')
     
     parser.add_argument("--only_todo", action='store_true',
             help='synchronize only TODO tasks to remote.')
@@ -95,7 +108,7 @@ def main():
     args = parser.parse_args()
 
     if not args.push and not args.sync and not args.pull:
-        args.list = True
+        args.script = True
     
     if args.push and not args.orgfile:
         parser.error('--orgfile must be specified when using --push')
@@ -110,18 +123,20 @@ def main():
         else:
             write_todolist(args.orgfile, args.profile, args.listname)
     elif args.push:
-        if not os.path.exists(args.orgfile):
-            print("The org-file you want to push does not exist.")
-            sys.exit(2)
         push_todolist(args.orgfile, args.profile, args.listname, args.only_todo)
     elif args.sync:
-        if not os.path.exists(args.orgfile):
-            print("The org-file you want to synchronize does not exist.")
-            sys.exit(2)
         sync_todolist(args.orgfile, args.profile, args.listname, args.only_todo)
-    elif args.list:
-        print("Use list of actions")
-        with codecs.open(MICHEL_PROFILE, 'r', 'utf-8') as actions_file:
+    elif args.script:
+        try:
+            scripts = [".michel-profile", save_data_path("profile")]
+            script_file = next(x for x in scripts if os.path.exists(x))
+        except:
+            print("The script file does not exist.")
+            sys.exit(2)
+
+        print("Use actions from script {0}".format(script_file))
+            
+        with codecs.open(script_file, 'r', 'utf-8') as actions_file:
             actions = json.load(actions_file)
         for entry in actions:
             if entry['action'] == 'sync':
