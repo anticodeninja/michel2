@@ -10,6 +10,7 @@ import tempfile
 import difflib
 
 from michel.utils import *
+import michel.console as console
 
 class InteractiveMergeConf:
     def __init__(self, adapter):
@@ -63,6 +64,7 @@ class InteractiveMergeConf:
     def __select_org_task(self, task_remote, tasks_org):        
         uprint("\"{0}\" has not exact mapping in your local org-tree.".format(task_remote.title))
         uprint("Please manualy choose necessary item:")
+        count = 2
 
         items = [[i, v, difflib.SequenceMatcher(a=task_remote.title, b=v.title).ratio()]
                  for i, v in enumerate(tasks_org)]
@@ -73,35 +75,51 @@ class InteractiveMergeConf:
         while True:
             for i in range(min(items_count, items_count_for_showing)):
                 uprint("[{0}] {1}".format(i, items[i][1].title))
+                count += 1 
                 
             if items_count > items_count_for_showing:
                 uprint("[m] ...")
+                count += 1
             
             uprint("[n] -- create new")
             uprint("[d] -- discard new")
+            count += 2
 
             result = input()
+            count += 1
+            
             try:
                 if result == 'm':
                     items_count_for_showing = items_count
                     continue
                 elif result == 'n':
-                    return 'new'
+                    result = 'new'
+                    break
                 elif result == 'd':
-                    return 'discard'
+                    result = 'discard'
+                    break
 
                 result = int(result)
                 if result >= 0 and result <= items_count:
-                    return items[result][0]
+                    result = items[result][0]
+                    break
             except:
                 pass
 
             uprint("Incorrect input!")
+            count += 1
+
+        console.cleanLastRows(count)
+        return result
 
     def __merge_title(self, task_remote, task_org):
-        uprint("Tasks has different titles")
-        uprint("Please manualy choose necessary value:")
-        return self.__select_from([task_remote.title, task_org.title])
+        return self.__select_from([
+            "Tasks has different titles",
+            "Please manualy choose necessary value:"
+        ], [
+            task_remote.title,
+            task_org.title
+        ])
 
     def __merge_completed(self, task_remote, task_org):
         return task_remote.completed or task_org.completed
@@ -118,41 +136,65 @@ class InteractiveMergeConf:
             return None
 
     def __merge_scheduled_start_time(self, task_remote, task_org):
-        uprint("Task \"{0}\" has different values for attribute \"scheduled_start_time\"".format(task_remote.title))
-        uprint("Please manualy choose necessary value:")
-        return self.__select_from([task_remote.scheduled_start_time, task_org.scheduled_start_time])
+        return self.__select_from([
+            "Task \"{0}\" has different values for attribute \"scheduled_start_time\"".format(task_remote.title),
+            "Please manualy choose necessary value:"
+        ], [
+            task_remote.scheduled_start_time,
+            task_org.scheduled_start_time
+        ])
 
     def __merge_scheduled_end_time(self, task_remote, task_org):
-        uprint("Task \"{0}\" has different values for attribute \"scheduled_end_time\"".format(task_remote.title))
-        uprint("Please manualy choose necessary value:")
-        return self.__select_from([task_remote.scheduled_end_time, task_org.scheduled_end_time])
+        return self.__select_from([
+            "Task \"{0}\" has different values for attribute \"scheduled_end_time\"".format(task_remote.title),
+            "Please manualy choose necessary value:"
+        ], [
+            task_remote.scheduled_end_time,
+            task_org.scheduled_end_time
+        ])
 
     def __merge_notes(self, task_remote, task_org):
         uprint("Task \"{0}\" has different values for attribute \"notes\"".format(task_remote.title))
         uprint("Please manualy choose necessary:")
+        count = 2
 
         items = [task_remote.notes, task_org.notes]
         while True:
             for i, v in enumerate(items):
                 uprint("[{0}] Use this block:".format(i))
+                count += 1
+                
                 for line in v:
                     uprint(line)
+                    count += 1
+                    
                 uprint("-------------------------------------")
+                count += 1
         
             uprint("[e] Edit in external editor")
+            count += 1
             
             result = input()
+            count += 1
+            
             try:
                 if result == 'e':
+                    result = None
                     break
                 
                 result = int(result)
                 if result >= 0 and result <= i:
-                    return items[result]
+                    result = items[result]
+                    break
             except:
                 pass
 
             uprint("Incorrect input!")
+            count += 1
+
+        console.cleanLastRows(count)
+        if result is not None:
+            return result
 
         # External editor
         temp_fid, temp_name = tempfile.mkstemp()
@@ -175,17 +217,29 @@ class InteractiveMergeConf:
         os.remove(temp_name)
         return result
 
-    def __select_from(self, items):
+    def __select_from(self, message, items):
+        for l in message:
+            uprint(l)
+        count = len(message)
+        
         while True:
             for i, v in enumerate(items):
                 uprint("[{0}] {1}".format(i, v))
+            count += len(items)
 
             result = input()
+            count += 1
+            
             try:
                 result = int(result)
                 if result >= 0 and result <= i:
-                    return items[result]
+                    result = items[result]
+                    break
             except:
                 pass
 
             uprint("Incorrect input!")
+            count += 1
+
+        console.cleanLastRows(count)
+        return result
