@@ -46,33 +46,42 @@ def write_todolist(path, profile, list_name=None):
     gtask_provider.pull()
     gtask_provider.get_tasks().write_file(path)
 
-def push_todolist(path, profile, list_name, only_todo):
+def push_todolist(org_path, profile, list_name, only_todo):
     """Pushes the specified file to the specified todolist"""
 
-    path = os.path.expanduser(path)
-    if not os.path.exists(path):
+    org_path = os.path.expanduser(org_path)
+    if not os.path.exists(org_path):
         print("The org-file you want to synchronize does not exist.")
         sys.exit(2)
+    org_tree = TasksTree.parse_file(org_path)
 
-    gtask_provider = GTaskProvider(profile, list_name, only_todo)
-    gtask_provider.set_tasks(TasksTree.parse_file(path))
-    gtask_provider.push()
+    gtask_provider = GTaskProvider(profile, list_name)
+    gtask_provider.erase()
+    remote_tree = gtask_provider.get_tasks()
 
-def sync_todolist(path, profile, list_name, only_todo):
+    sync_plan = treemerge(org_tree, remote_tree, None, InteractiveMergeConf(gtask_provider, only_todo))
+    gtask_provider.sync(sync_plan)
+
+def sync_todolist(org_path, profile, list_name, only_todo):
     """Synchronizes the specified file with the specified todolist"""
 
-    path = os.path.expanduser(path)
-    if not os.path.exists(path):
+    org_path = os.path.expanduser(org_path)
+    if not os.path.exists(org_path):
         print("The org-file you want to synchronize does not exist.")
         sys.exit(2)
+    org_tree = TasksTree.parse_file(org_path)
 
-    gtask_provider = GTaskProvider(profile, list_name, only_todo)
+    gtask_provider = GTaskProvider(profile, list_name)
     gtask_provider.pull()
-    tree_org = TasksTree.parse_file(path)
+    remote_tree = gtask_provider.get_tasks()
+
+    base_path = os.path.splitext(org_path)[0] + ".base"
+    base_tree = TasksTree.parse_file(base_path) if os.path.exists(base_path) else None
     
-    sync_plan = treemerge(tree_org, gtask_provider.get_tasks(), InteractiveMergeConf(gtask_provider))
+    sync_plan = treemerge(org_tree, remote_tree, base_tree, InteractiveMergeConf(gtask_provider, only_todo))
     gtask_provider.sync(sync_plan)
-    codecs.open(path, "w", "utf-8").write(str(tree_org))
+    codecs.open(org_path, "w", "utf-8").write(str(org_tree))
+    codecs.open(base_path, "w", "utf-8").write(str(org_tree))
 
 def main():
     parser = argparse.ArgumentParser(description="Synchronize org-mode text" 

@@ -16,39 +16,42 @@ import michel as m
 from tests import getLocaleAlias
 
 class TestMergeConf:
-    def is_needed(self, item):
-        return item.todo and not item.completed
+    def is_needed(self, task):
+        return task.todo and not task.completed
 
-    def select_org_task(self, item, items):
-        if (item.title == "Headline A1.1") or\
-           (item.title == "Headline G") or\
-           (item.title == "Headline H"):
+    def select_org_task(self, unmapped_task, tasklist):
+        if (unmapped_task.title == "Headline A1.1") or\
+           (unmapped_task.title == "Headline G") or\
+           (unmapped_task.title == "Headline H"):
             return 'new'
         
-        if item.title == "Headline B2 modified":
-            return m.utils.get_index(items, lambda item: item.title == "Headline B2")
-        if item.title == "Headline B3":
-            return m.utils.get_index(items, lambda item: item.title == "Headline B3 original")
+        if unmapped_task.title == "Headline B2 modified":
+            return m.utils.get_index(tasklist, lambda item: item.title == "Headline B2")
+        if unmapped_task.title == "Headline B3":
+            return m.utils.get_index(tasklist, lambda item: item.title == "Headline B3 original")
 
         raise Exception("Undefined behavior")
 
-    def merge_title(self, task1, task2):
-        if task1.title == "Headline B2 modified":
-            return task1.title
-        if task1.title == "Headline B3":
-            return task2.title
+    def merge_title(self, mapping):
+        if mapping.remote.title == "Headline B2 modified":
+            return mapping.remote.title
+        if mapping.remote.title == "Headline B3":
+            return mapping.org.title
 
-    def merge_completed(self, task1, task2):
-        return task1.completed or task2.completed
+        import ipdb; ipdb.set_trace()
+        raise Exception("Undefined behavior")
 
-    def merge_closed_time(self, task_remote, task_org):
-        return self.__select_from([task_remote.closed_time, task_org.closed_time])
+    def merge_completed(self, mapping):
+        return mapping.org.completed or mapping.remote.completed
 
-    def merge_scheduled_start_time(self, task_remote, task_org):
-        return self.__select_from([task_remote.scheduled_start_time, task_org.scheduled_start_time])
+    def merge_closed_time(self, mapping):
+        return self.__select_from([mapping.org.closed_time, mapping.remote.closed_time])
 
-    def merge_scheduled_end_time(self, task_remote, task_org):
-        return self.__select_from([task_remote.scheduled_end_time, task_org.scheduled_end_time])
+    def merge_scheduled_start_time(self, mapping):
+        return self.__select_from([mapping.org.scheduled_start_time, mapping.remote.scheduled_start_time])
+
+    def merge_scheduled_end_time(self, mapping):
+        return self.__select_from([mapping.org.scheduled_end_time, mapping.remote.scheduled_end_time])
 
     def __select_from(self, items):        
         items = [x for x in items if x is not None]
@@ -57,9 +60,21 @@ class TestMergeConf:
 
         raise Exception("Undefined behavior")
 
-    def merge_notes(self, task1, task2):
-        if task1.notes == ['New B2 body text.']:
-            return task1.notes
+    def merge_notes(self, mapping):
+        if mapping.remote.notes == ['New B2 body text.']:
+            return mapping.remote.notes
+
+        raise Exception("Undefined behavior")
+
+class TestAdapterFor3Way:
+    def is_needed(self, default, task):
+        return task.todo and not task.completed
+    
+    def select_org_task(self, default, unmapped_task, tasklist):
+        if unmapped_task.title == "TitleMergeTask2":
+            return m.utils.get_index(tasklist, lambda item: item.title == "TitleMergeTask2 org-edited")
+        if unmapped_task.title == "TitleMergeTask3 remote-edited":
+            return m.utils.get_index(tasklist, lambda item: item.title == "TitleMergeTask3")
 
         raise Exception("Undefined behavior")
 
@@ -87,8 +102,8 @@ class TestMichel(unittest.TestCase):
         remote_tree.add_subtask('Headline A2').update(todo=True).\
             add_subtask('Headline A2.1')
         remote_tree.add_subtask('Headline B2 modified').update(notes=["New B2 body text."])
-        
-        m.treemerge(org_tree, remote_tree, TestMergeConf())
+
+        m.treemerge(org_tree, remote_tree, None, TestMergeConf())
 
         result_text = textwrap.dedent("""\
             * Headline A1
@@ -124,7 +139,7 @@ class TestMichel(unittest.TestCase):
         remote_tree.add_subtask('Headline D').update(todo=True)
         remote_tree.add_subtask('Headline G').update(todo=True)
 
-        m.treemerge(org_tree, remote_tree, TestMergeConf())
+        m.treemerge(org_tree, remote_tree, None, TestMergeConf())
         
         result_text = textwrap.dedent("""\
             * Headline A
@@ -194,7 +209,7 @@ class TestMichel(unittest.TestCase):
             """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
 
 
-        remote_sync_plan = m.treemerge(org_tree, remote_tree, TestMergeConf())
+        remote_sync_plan = m.treemerge(org_tree, remote_tree, None, TestMergeConf())
 
         self.assertEqual(str(org_tree), result_text)
         self.assertEqual(len(remote_sync_plan), 7)
@@ -252,7 +267,7 @@ class TestMichel(unittest.TestCase):
                                                      scheduled_end_time=datetime.datetime(2015, 12, 9, 21, 0, tzinfo = m.LocalTzInfo()))
         remote_tree.add_subtask('Headline D').update(todo=True, scheduled_start_time=datetime.datetime(2015, 12, 9, tzinfo = m.LocalTzInfo()))
         
-        m.treemerge(org_tree, remote_tree, TestMergeConf())
+        m.treemerge(org_tree, remote_tree, None, TestMergeConf())
 
         result_text = textwrap.dedent("""\
             * TODO Headline A
@@ -264,6 +279,91 @@ class TestMichel(unittest.TestCase):
               SCHEDULED: <2015-12-09 Wed>
             """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
         self.assertEqual(str(org_tree), result_text)
+
+    def test_3way_merge(self):
+        import michel.utils as mu
+        mu.default_locale = getLocaleAlias('us')
+        
+        base_text = textwrap.dedent("""\
+            * NotTodoTestTask
+            * TitleMergeTest
+            ** TODO TitleMergeTask1
+            ** TODO TitleMergeTask2
+            ** TODO TitleMergeTask3
+            * ScheduleMergeTest
+            * TODO ScheduleMergeTask1
+              SCHEDULED: <2015-12-09 Wed>
+            * TODO ScheduleMergeTask2
+              SCHEDULED: <2015-12-09 Wed>
+            * TODO ScheduleMergeTask3
+              SCHEDULED: <2015-12-09 Wed>
+            """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
+        base_tree = m.TasksTree.parse_text(base_text)
+        
+        org_text = textwrap.dedent("""\
+            * NotTodoTestTask
+            * TitleMergeTest
+            ** TODO TitleMergeTask1
+            ** TODO TitleMergeTask2 org-edited
+            ** TODO TitleMergeTask3
+            * ScheduleMergeTest
+            * TODO ScheduleMergeTask1
+              SCHEDULED: <2015-12-09 Wed>
+            * TODO ScheduleMergeTask2
+              SCHEDULED: <2015-12-10 Thu>
+            * TODO ScheduleMergeTask3
+              SCHEDULED: <2015-12-09 Wed>
+            """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
+        org_tree = m.TasksTree.parse_text(org_text)
+
+        remote_tree = m.TasksTree(None)
+        remote_tasks = [
+            remote_tree.add_subtask('TitleMergeTask1').update(todo=True),
+            remote_tree.add_subtask('TitleMergeTask2').update(todo=True),
+            remote_tree.add_subtask('TitleMergeTask3 remote-edited').update(todo=True),
+            remote_tree.add_subtask('ScheduleMergeTask1').update(todo=True,
+                                                                 scheduled_has_time=False,
+                                                                 scheduled_start_time=datetime.datetime(2015, 12, 9, tzinfo = m.LocalTzInfo())),
+            remote_tree.add_subtask('ScheduleMergeTask2').update(todo=True,
+                                                                 scheduled_has_time=False,
+                                                                 scheduled_start_time=datetime.datetime(2015, 12, 9, tzinfo = m.LocalTzInfo())),
+            remote_tree.add_subtask('ScheduleMergeTask3').update(todo=True,
+                                                                 scheduled_has_time=False,
+                                                                 scheduled_start_time=datetime.datetime(2015, 12, 11, tzinfo = m.LocalTzInfo())),
+        ]
+
+        result_text = textwrap.dedent("""\
+            * NotTodoTestTask
+            * TitleMergeTest
+            ** TODO TitleMergeTask1
+            ** TODO TitleMergeTask2 org-edited
+            ** TODO TitleMergeTask3 remote-edited
+            * ScheduleMergeTest
+            * TODO ScheduleMergeTask1
+              SCHEDULED: <2015-12-09 Wed>
+            * TODO ScheduleMergeTask2
+              SCHEDULED: <2015-12-10 Thu>
+            * TODO ScheduleMergeTask3
+              SCHEDULED: <2015-12-11 Fri>
+            """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
+
+
+        remote_sync_plan = m.treemerge(org_tree, remote_tree, base_tree, m.InteractiveMergeConf(TestAdapterFor3Way()))
+
+        self.assertEqual(str(org_tree), result_text)
+        self.assertEqual(len(remote_sync_plan), 2)
+
+        # TitleMergeTask2 org-edited
+        assertObj = next(x for x in remote_sync_plan if x['item'] == remote_tasks[1])
+        self.assertEqual(assertObj['action'], 'update')
+        self.assertEqual(assertObj['changes'], ['title'])
+        self.assertEqual(assertObj['item'].title, 'TitleMergeTask2 org-edited')
+
+        # ScheduleMergeTask2
+        assertObj = next(x for x in remote_sync_plan if x['item'] == remote_tasks[4])
+        self.assertEqual(assertObj['action'], 'update')
+        self.assertEqual(assertObj['changes'], ['scheduled_start_time'])
+        self.assertEqual(assertObj['item'].scheduled_start_time, datetime.datetime(2015, 12, 10, tzinfo = m.LocalTzInfo()))
 
         
 if __name__ == '__main__':

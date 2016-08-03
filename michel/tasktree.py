@@ -133,7 +133,7 @@ class TasksTree(object):
                 task_line.append('DONE')
             elif subtask.todo:
                 task_line.append('TODO')
-            task_line.append(subtask.title)    
+            task_line.append(subtask.title)
             res.append(' '.join(task_line))
 
             time_line = [' ' * (level + 1)]
