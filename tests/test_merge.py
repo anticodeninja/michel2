@@ -402,6 +402,70 @@ class TestMichel(unittest.TestCase):
         self.assertEqual(assertObj['item'].schedule_time,
                          m.OrgDate(datetime.date(2015, 12, 10)))
 
+    def test_repeated_task_merge(self):
+        m.OrgDate.default_locale = getLocaleAlias('us')
+        
+        base_text = textwrap.dedent("""\
+            * TODO RepeatedTask
+              SCHEDULED: <2015-12-09 Wed>
+            * TODO RepeatedTask
+              SCHEDULED: <2015-12-10 Thu>
+            * TODO RepeatedTask
+              SCHEDULED: <2015-12-12 Sat>
+            """)
+        base_tree = m.TasksTree.parse_text(base_text)
+        
+        org_text = textwrap.dedent("""\
+            * TODO RepeatedTask
+              SCHEDULED: <2015-12-09 Wed>
+            * TODO RepeatedTask
+              SCHEDULED: <2015-12-10 Thu>
+            * DONE RepeatedTask
+              CLOSED: [2015-12-12 Sat] SCHEDULED: <2015-12-12 Sat>
+            """)
+        org_tree = m.TasksTree.parse_text(org_text)
+
+        remote_tree = m.TasksTree(None)
+        remote_tasks = [
+            remote_tree.add_subtask('RepeatedTask').update(
+                completed=True,
+                closed_time=m.OrgDate(datetime.date(2015, 12, 11)),
+                schedule_time=m.OrgDate(datetime.date(2015, 12, 11))),
+            remote_tree.add_subtask('RepeatedTask').update(
+                todo=True,
+                schedule_time=m.OrgDate(datetime.date(2015, 12, 9))),
+            remote_tree.add_subtask('RepeatedTask').update(
+                todo=True,
+                schedule_time=m.OrgDate(datetime.date(2015, 12, 12))),
+            remote_tree.add_subtask('RepeatedTask').update(
+                todo=True,
+                schedule_time=m.OrgDate(datetime.date(2015, 12, 14))),
+        ]
+
+        result_text = textwrap.dedent("""\
+            * TODO RepeatedTask
+              SCHEDULED: <2015-12-09 Wed>
+            * DONE RepeatedTask
+              CLOSED: [2015-12-11 Fri] SCHEDULED: <2015-12-11 Fri>
+            * DONE RepeatedTask
+              CLOSED: [2015-12-12 Sat] SCHEDULED: <2015-12-12 Sat>
+            * TODO RepeatedTask
+              SCHEDULED: <2015-12-14 Mon>
+            """)
+
+
+        remote_sync_plan = m.treemerge(org_tree, remote_tree, base_tree, m.InteractiveMergeConf(TestAdapterFor3Way()))
+
+        self.assertEqual(str(org_tree), result_text)
+        self.assertEqual(len(remote_sync_plan), 2)
+
+        # Remove RepeatedTask <2015-12-11 Fri>
+        assertObj = next(x for x in remote_sync_plan if x['item'] == remote_tasks[0])
+        self.assertEqual(assertObj['action'], 'remove')
+
+        # Remove RepeatedTask <2015-12-12 Sat>
+        assertObj = next(x for x in remote_sync_plan if x['item'] == remote_tasks[2])
+        self.assertEqual(assertObj['action'], 'remove')
 
         
 if __name__ == '__main__':
