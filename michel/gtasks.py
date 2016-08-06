@@ -24,25 +24,21 @@ class GTaskProvider:
         
         self.__init_service()
 
-    def merge_scheduled_start_time(self, default, mapping):
-        r_time = mapping.remote.scheduled_start_time
-        o_time = mapping.org.scheduled_start_time
+    def merge_schedule_time(self, default, mapping):
+        remote = mapping.remote.schedule_time
+        org = mapping.org.schedule_time
 
-        if r_time and o_time and r_time.year == o_time.year and r_time.month == o_time.month and r_time.day == o_time.day:
-            mapping.remote.scheduled_start_time = o_time
-            return o_time
+        if not remote or not org:
+            return default(mapping)
 
-        return default(mapping)
+        remote = remote.get_date()
+        org = org.get_date()
 
-    def merge_scheduled_end_time(self, default, mapping):
-        r_time = mapping.remote.scheduled_start_time
-        o_time = mapping.org.scheduled_end_time
+        if remote.year != org.year or remote.month != org.month or remote.day != org.day:
+            return default(mapping)
         
-        if r_time.year == o_time.year and r_time.month == o_time.month and r_time.day == o_time.day:
-            mapping.remote.scheduled_end_time = o_time
-            return o_time
-
-        return default(mapping)
+        mapping.remote.schedule_time = mapping.org.schedule_time
+        return mapping.org.schedule_time
 
     def get_tasks(self):
         return self.__tasks_tree
@@ -83,8 +79,8 @@ class GTaskProvider:
                 if task.closed_time is not None:
                     gtask['completed'] = to_google_date_format(task.closed_time)
                 
-                if task.scheduled_start_time is not None:
-                    gtask['due'] = to_google_date_format(task.scheduled_start_time)
+                if task.schedule_time is not None:
+                    gtask['due'] = to_google_date_format(task.schedule_time)
 
                 res = self.__service.tasks().insert(
                     tasklist=self.__list_id,
@@ -107,8 +103,8 @@ class GTaskProvider:
                     else:
                         gtask['status'] = 'needsAction'
                         gtask['completed'] = None
-                if 'scheduled_start_time' in item['changes']:
-                    gtask['due'] = to_google_date_format(task.scheduled_start_time)
+                if 'schedule_time' in item['changes']:
+                    gtask['due'] = to_google_date_format(task.schedule_time)
 
                 if len(gtask) == 0:
                     continue
@@ -169,11 +165,8 @@ class GTaskProvider:
 
                 task.todo = True
                 task.completed = gtask['status'] == 'completed'
-                task.scheduled_start_time = from_google_date_format(gtask['due']) if 'due' in gtask else None
+                task.schedule_time = from_google_date_format(gtask['due']) if 'due' in gtask else None
                 task.closed_time = from_google_date_format(gtask['completed']) if 'completed' in gtask else None
-
-                if task.completed and not task.closed_time:
-                    task.closed_time = datetime.datetime.now()
                     
                 task.notes = []
                 if 'notes' in gtask:

@@ -47,11 +47,8 @@ class TestMergeConf:
     def merge_closed_time(self, mapping):
         return self.__select_from([mapping.org.closed_time, mapping.remote.closed_time])
 
-    def merge_scheduled_start_time(self, mapping):
-        return self.__select_from([mapping.org.scheduled_start_time, mapping.remote.scheduled_start_time])
-
-    def merge_scheduled_end_time(self, mapping):
-        return self.__select_from([mapping.org.scheduled_end_time, mapping.remote.scheduled_end_time])
+    def merge_schedule_time(self, mapping):
+        return self.__select_from([mapping.org.schedule_time, mapping.remote.schedule_time])
 
     def __select_from(self, items):        
         items = [x for x in items if x is not None]
@@ -134,10 +131,16 @@ class TestMichel(unittest.TestCase):
         org_tree = m.TasksTree.parse_text(org_text)
 
         remote_tree = m.TasksTree(None)
-        remote_tree.add_subtask('Headline B1').update(completed=True)
-        remote_tree.add_subtask('Headline C').update(completed=True)
-        remote_tree.add_subtask('Headline D').update(todo=True)
-        remote_tree.add_subtask('Headline G').update(todo=True)
+        remote_tree.add_subtask('Headline B1').update(
+            completed=True,
+            closed_time=m.OrgDate.now()),
+        remote_tree.add_subtask('Headline C').update(
+            completed=True,
+            closed_time=m.OrgDate.now()),
+        remote_tree.add_subtask('Headline D').update(
+            todo=True)
+        remote_tree.add_subtask('Headline G').update(
+            todo=True)
 
         m.treemerge(org_tree, remote_tree, None, TestMergeConf())
         
@@ -154,7 +157,7 @@ class TestMichel(unittest.TestCase):
             * DONE Headline F
             ** Headline F1
             * TODO Headline G
-            """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
+            """.format(m.OrgDate.now().to_org_format()))
         self.assertEqual(str(org_tree), result_text)
 
         
@@ -173,18 +176,28 @@ class TestMichel(unittest.TestCase):
             * Headline E
             ** DONE Headline E1
             * TODO Headline F
-            """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
+            """.format(m.OrgDate.now().to_org_format()))
         org_tree = m.TasksTree.parse_text(org_text)
 
         remote_tree = m.TasksTree(None)
         remote_tasks = [
-            remote_tree.add_subtask('Headline B1').update(completed=True),
-            remote_tree.add_subtask('Headline B2 modified').update(todo=True),
-            remote_tree.add_subtask('Headline B3').update(todo=True),
-            remote_tree.add_subtask('Headline C').update(completed=True),
-            remote_tree.add_subtask('Headline D1').update(todo=True),
-            remote_tree.add_subtask('Headline G').update(todo=True),
-            remote_tree.add_subtask('Headline H').update(completed=True)
+            remote_tree.add_subtask('Headline B1').update(
+                completed=True,
+                closed_time=m.OrgDate.now()),
+            remote_tree.add_subtask('Headline B2 modified').update(
+                todo=True),
+            remote_tree.add_subtask('Headline B3').update(
+                todo=True),
+            remote_tree.add_subtask('Headline C').update(
+                completed=True,
+                closed_time=m.OrgDate.now()),
+            remote_tree.add_subtask('Headline D1').update(
+                todo=True),
+            remote_tree.add_subtask('Headline G').update(
+                todo=True),
+            remote_tree.add_subtask('Headline H').update(
+                completed=True,
+                closed_time=m.OrgDate.now())
         ]
 
         result_text = textwrap.dedent("""\
@@ -206,7 +219,7 @@ class TestMichel(unittest.TestCase):
             * TODO Headline G
             * DONE Headline H
               CLOSED: [{0}]
-            """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
+            """.format(m.OrgDate.now().to_org_format()))
 
 
         remote_sync_plan = m.treemerge(org_tree, remote_tree, None, TestMergeConf())
@@ -247,8 +260,7 @@ class TestMichel(unittest.TestCase):
         
 
     def test_sync_time(self):
-        import michel.utils as mu
-        mu.default_locale = getLocaleAlias('us')
+        m.OrgDate.default_locale = getLocaleAlias('us')
         
         org_text = textwrap.dedent("""\
             * TODO Headline A
@@ -259,13 +271,20 @@ class TestMichel(unittest.TestCase):
         org_tree = m.TasksTree.parse_text(org_text)
 
         remote_tree = m.TasksTree(None)
-        remote_tree.add_subtask('Headline A').update(todo=True, scheduled_start_time=datetime.datetime(2015, 12, 9, tzinfo = m.LocalTzInfo()))
-        remote_tree.add_subtask('Headline B').update(todo=True)
-        remote_tree.add_subtask('Headline C').update(completed=True,
-                                                     scheduled_has_time=True,
-                                                     scheduled_start_time=datetime.datetime(2015, 12, 9, 20, 0, tzinfo = m.LocalTzInfo()),\
-                                                     scheduled_end_time=datetime.datetime(2015, 12, 9, 21, 0, tzinfo = m.LocalTzInfo()))
-        remote_tree.add_subtask('Headline D').update(todo=True, scheduled_start_time=datetime.datetime(2015, 12, 9, tzinfo = m.LocalTzInfo()))
+        remote_tree.add_subtask('Headline A').update(
+            todo=True,
+            schedule_time=m.OrgDate(datetime.date(2015, 12, 9)))
+        remote_tree.add_subtask('Headline B').update(
+            todo=True)
+        remote_tree.add_subtask('Headline C').update(
+            completed=True,
+            closed_time=m.OrgDate.now(),
+            schedule_time=m.OrgDate(datetime.date(2015, 12, 9),
+                                    datetime.time(20, 0),
+                                    datetime.timedelta(hours=1))),
+        remote_tree.add_subtask('Headline D').update(
+            todo=True,
+            schedule_time=m.OrgDate(datetime.date(2015, 12, 9)))
         
         m.treemerge(org_tree, remote_tree, None, TestMergeConf())
 
@@ -277,12 +296,26 @@ class TestMichel(unittest.TestCase):
               CLOSED: [{0}] SCHEDULED: <2015-12-09 Wed 20:00-21:00>
             * TODO Headline D
               SCHEDULED: <2015-12-09 Wed>
-            """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
+            """.format(m.OrgDate.now().to_org_format()))
         self.assertEqual(str(org_tree), result_text)
 
+    def test_org_date(self):
+        reference = m.OrgDate(datetime.date(2016, 8, 5),
+                              datetime.time(12, 0))
+        same = m.OrgDate(datetime.date(2016, 8, 5),
+                         datetime.time(12, 0))
+        earlier = m.OrgDate(datetime.date(2016, 8, 4),
+                         datetime.time(12, 0))
+        later = m.OrgDate(datetime.date(2016, 8, 5),
+                          datetime.time(12, 45))
+
+        self.assertEqual(reference, same)
+        self.assertEqual(earlier < reference, True)
+        self.assertEqual(reference < later, True)
+        self.assertEqual(min(later, earlier, reference), earlier)
+
     def test_3way_merge(self):
-        import michel.utils as mu
-        mu.default_locale = getLocaleAlias('us')
+        m.OrgDate.default_locale = getLocaleAlias('us')
         
         base_text = textwrap.dedent("""\
             * NotTodoTestTask
@@ -297,7 +330,7 @@ class TestMichel(unittest.TestCase):
               SCHEDULED: <2015-12-09 Wed>
             * TODO ScheduleMergeTask3
               SCHEDULED: <2015-12-09 Wed>
-            """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
+            """.format(m.OrgDate.now().to_org_format()))
         base_tree = m.TasksTree.parse_text(base_text)
         
         org_text = textwrap.dedent("""\
@@ -313,23 +346,26 @@ class TestMichel(unittest.TestCase):
               SCHEDULED: <2015-12-10 Thu>
             * TODO ScheduleMergeTask3
               SCHEDULED: <2015-12-09 Wed>
-            """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
+            """.format(m.OrgDate.now().to_org_format()))
         org_tree = m.TasksTree.parse_text(org_text)
 
         remote_tree = m.TasksTree(None)
         remote_tasks = [
-            remote_tree.add_subtask('TitleMergeTask1').update(todo=True),
-            remote_tree.add_subtask('TitleMergeTask2').update(todo=True),
-            remote_tree.add_subtask('TitleMergeTask3 remote-edited').update(todo=True),
-            remote_tree.add_subtask('ScheduleMergeTask1').update(todo=True,
-                                                                 scheduled_has_time=False,
-                                                                 scheduled_start_time=datetime.datetime(2015, 12, 9, tzinfo = m.LocalTzInfo())),
-            remote_tree.add_subtask('ScheduleMergeTask2').update(todo=True,
-                                                                 scheduled_has_time=False,
-                                                                 scheduled_start_time=datetime.datetime(2015, 12, 9, tzinfo = m.LocalTzInfo())),
-            remote_tree.add_subtask('ScheduleMergeTask3').update(todo=True,
-                                                                 scheduled_has_time=False,
-                                                                 scheduled_start_time=datetime.datetime(2015, 12, 11, tzinfo = m.LocalTzInfo())),
+            remote_tree.add_subtask('TitleMergeTask1').update(
+                todo=True),
+            remote_tree.add_subtask('TitleMergeTask2').update(
+                todo=True),
+            remote_tree.add_subtask('TitleMergeTask3 remote-edited').update(
+                todo=True),
+            remote_tree.add_subtask('ScheduleMergeTask1').update(
+                todo=True,
+                schedule_time=m.OrgDate(datetime.date(2015, 12, 9))),
+            remote_tree.add_subtask('ScheduleMergeTask2').update(
+                todo=True,
+                schedule_time=m.OrgDate(datetime.date(2015, 12, 9))),
+            remote_tree.add_subtask('ScheduleMergeTask3').update(
+                todo=True,
+                schedule_time=m.OrgDate(datetime.date(2015, 12, 11))),
         ]
 
         result_text = textwrap.dedent("""\
@@ -345,7 +381,7 @@ class TestMichel(unittest.TestCase):
               SCHEDULED: <2015-12-10 Thu>
             * TODO ScheduleMergeTask3
               SCHEDULED: <2015-12-11 Fri>
-            """.format(m.to_emacs_date_format(True, datetime.datetime.now())))
+            """)
 
 
         remote_sync_plan = m.treemerge(org_tree, remote_tree, base_tree, m.InteractiveMergeConf(TestAdapterFor3Way()))
@@ -362,8 +398,10 @@ class TestMichel(unittest.TestCase):
         # ScheduleMergeTask2
         assertObj = next(x for x in remote_sync_plan if x['item'] == remote_tasks[4])
         self.assertEqual(assertObj['action'], 'update')
-        self.assertEqual(assertObj['changes'], ['scheduled_start_time'])
-        self.assertEqual(assertObj['item'].scheduled_start_time, datetime.datetime(2015, 12, 10, tzinfo = m.LocalTzInfo()))
+        self.assertEqual(assertObj['changes'], ['schedule_time'])
+        self.assertEqual(assertObj['item'].schedule_time,
+                         m.OrgDate(datetime.date(2015, 12, 10)))
+
 
         
 if __name__ == '__main__':

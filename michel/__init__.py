@@ -16,6 +16,7 @@ from michel.utils import *
 from michel.gtasks import *
 from michel.mergetask import *
 from michel.mergeconf import *
+from michel.tasktree import *
         
 def print_todolist(profile, list_name=None):
     """Print an orgmode-formatted string representing a google tasks list.

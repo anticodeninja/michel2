@@ -42,15 +42,10 @@ class InteractiveMergeConf:
             return self.__adapter.merge_closed_time(self.__merge_closed_time, mapping)
         return self.__merge_closed_time(mapping)
 
-    def merge_scheduled_start_time(self, mapping):
-        if hasattr(self.__adapter, 'merge_scheduled_start_time'):
-            return self.__adapter.merge_scheduled_start_time(self.__merge_scheduled_start_time, mapping)
-        return self.__merge_scheduled_start_time(mapping)
-
-    def merge_scheduled_end_time(self, mapping):
-        if hasattr(self.__adapter, 'merge_scheduled_end_time'):
-            return self.__adapter.merge_scheduled_end_time(self.__merge_scheduled_end_time, mapping)
-        return self.__merge_scheduled_end_time(mapping)
+    def merge_schedule_time(self, mapping):
+        if hasattr(self.__adapter, 'merge_schedule_time'):
+            return self.__adapter.merge_schedule_time(self.__merge_schedule_time, mapping)
+        return self.__merge_schedule_time(mapping)
 
     def merge_notes(self, mapping):
         if hasattr(self.__adapter, 'merge_notes'):
@@ -151,34 +146,21 @@ class InteractiveMergeConf:
             elif mapping.org.closed_time or mapping.remote.closed_time:
                 return mapping.org.closed_time or mapping.remote.closed_time
             else:
-                return datetime.datetime.now()
+                return m.OrgDate.now()
         else:
             return None
 
-    def __merge_scheduled_start_time(self, mapping):
-        detected_change = self.__extract_from_base(mapping, 'scheduled_start_time')
+    def __merge_schedule_time(self, mapping):
+        detected_change = self.__extract_from_base(mapping, 'schedule_time')
         if detected_change is not None:
             return detected_change
         
         return self.__select_from([
-            "Task \"{0}\" has different values for attribute \"scheduled_start_time\"".format(mapping.org.title),
+            "Task \"{0}\" has different values for attribute \"schedule_time\"".format(mapping.org.title),
             "Please manualy choose necessary value:"
         ], [
-            mapping.org.scheduled_start_time,
-            mapping.remote.scheduled_start_time
-        ])
-
-    def __merge_scheduled_end_time(self, mapping):
-        detected_change = self.__extract_from_base(mapping, 'scheduled_end_time')
-        if detected_change is not None:
-            return detected_change
-        
-        return self.__select_from([
-            "Task \"{0}\" has different values for attribute \"scheduled_end_time\"".format(mapping.remote.title),
-            "Please manualy choose necessary value:"
-        ], [
-            mapping.org.scheduled_end_time,
-            mapping.remote.scheduled_end_time
+            mapping.org.schedule_time,
+            mapping.remote.schedule_time
         ])
 
     def __merge_notes(self, mapping):
@@ -186,7 +168,7 @@ class InteractiveMergeConf:
         if detected_change is not None:
             return detected_change
         
-        uprint("Task \"{0}\" has different values for attribute \"notes\"".format(mapping.remote.title))
+        uprint("Task \"{0}\" has different values for attribute \"notes\"".format(mapping.org.title))
         uprint("Please manualy choose necessary:")
         count = 2
 

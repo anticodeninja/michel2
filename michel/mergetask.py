@@ -50,7 +50,7 @@ def merge_attr(mapping, attr_name, merge_func, changes_list):
         changes_list.append(attr_name)
 
 def copy_attr(task_dst, task_src):
-    for attr_name in ["notes", "todo", "completed", "closed_time", "scheduled_start_time", "scheduled_end_time"]:
+    for attr_name in ["notes", "todo", "completed", "closed_time", "schedule_time"]:
         setattr(task_dst, attr_name, getattr(task_src, attr_name))
 
 
@@ -130,8 +130,7 @@ def treemerge(tree_org, tree_remote, tree_base, conf):
         merge_attr(merge_entry, "title", lambda a: conf.merge_title(a), changes_list)
         merge_attr(merge_entry, "completed", lambda a: conf.merge_completed(a), changes_list)
         merge_attr(merge_entry, "closed_time", lambda a: conf.merge_closed_time(a), changes_list)
-        merge_attr(merge_entry, "scheduled_start_time", lambda a: conf.merge_scheduled_start_time(a), changes_list)
-        merge_attr(merge_entry, "scheduled_end_time", lambda a: conf.merge_scheduled_end_time(a), changes_list)
+        merge_attr(merge_entry, "schedule_time", lambda a: conf.merge_schedule_time(a), changes_list)
         merge_attr(merge_entry, "notes", lambda a: conf.merge_notes(a), changes_list)
 
         if conf.is_needed(map_entry.remote.task):

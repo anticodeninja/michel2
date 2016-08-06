@@ -11,6 +11,116 @@ from michel.utils import *
 headline_regex = re.compile("^(\*+) *(DONE|TODO)? *(.*)")
 timeline_regex = re.compile("(?:CLOSED: \[(.*)\]|(?:SCHEDULED: <(.*)>) *)+")
 
+class OrgDate:
+    default_locale = None
+    _regex = re.compile("(\d+)-(\d+)-(\d+) \S+(?: (\d+):(\d+)(?:-(\d+):(\d+))?)?")
+
+    def __init__(self, date, start_time = None, duration = None):
+        if start_time is None and duration is not None:
+            raise ValueError("duration cannot be defined without start_time")
+            
+        self._date = date
+        self._start_time = start_time
+        self._duration = duration
+        
+
+    @classmethod
+    def parse_org_format(self, org_time = None):
+        if org_time is None:
+            return None
+        
+        temp = [int(x) for x in self._regex.findall(org_time)[0] if len(x) > 0]
+        if len(temp) < 3:
+            return None
+
+        date = datetime.date(temp[0], temp[1], temp[2])
+        start_time = datetime.time(temp[3], temp[4]) if len(temp) > 3 else None
+        duration = self._calc_duration(start_time, datetime.time(temp[5], temp[6])) if len(temp) > 5 else None
+
+        return self(date, start_time, duration)
+
+    @classmethod
+    def now(self):
+        temp = datetime.datetime.now()
+
+        return self(datetime.date(temp.year, temp.month, temp.day),
+                    datetime.time(temp.hour, temp.minute))
+
+    def to_org_format(self):
+        try:
+            old_locale = locale.getlocale(locale.LC_TIME)
+            locale.setlocale(locale.LC_TIME, type(self).default_locale)
+            res = self._date.strftime("%Y-%m-%d %a")
+
+            if self._start_time:
+                res += self._start_time.strftime(" %H:%M")
+                
+            if self._duration:
+                res += self._calc_end_time(self._start_time, self._duration).strftime("-%H:%M")
+
+            if os.name == 'nt':
+                # It's hell...
+                res = res.encode('latin-1').decode(locale.getpreferredencoding())
+                                           
+            return res
+        finally:
+            locale.setlocale(locale.LC_TIME, old_locale)
+
+    def get_date(self):
+        return self._date
+
+    def get_time(self):
+        return self._time
+
+    def get_hash(self):
+        total_days2 = (self._date.year * 12 + self._date.month) * 31 + self._date.day
+        total_minutes2 = (self._start_time.hour * 60 + self._start_time.minute) if self._start_time else 0
+        return total_days2 * 24 * 60 + total_minutes2
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+            self._date == other._date and \
+            self._start_time == other._start_time and \
+            self._duration == other._duration
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __lt__(self, other):
+        if self._date < other._date:
+            return True
+        elif self._date > other._date:
+            return False
+
+        if self._start_time < other._start_time:
+            return True
+        elif self._start_time > other._start_time:
+            return False
+
+        return False
+
+    def __str__(self):
+        return self.to_org_format()
+
+    @classmethod
+    def _calc_duration(self, time1, time2):
+        return datetime.timedelta(minutes = (time2.hour - time1.hour) * 60 + (time2.minute - time1.minute))
+
+    @classmethod
+    def _calc_end_time(self, time, duration):
+        duration_hours, remainder = divmod(duration.seconds, 3600)
+        duration_minutes, _ = divmod(remainder, 60)
+
+        hours = time.hour + duration_hours
+        minutes = time.minute + duration_minutes
+        
+        while minutes >= 60:
+            hours += 1
+            minutes -= 60
+            
+        return datetime.time(hours, minutes)
+                                        
+        
 class TasksTree(object):
     """
     Tree for holding tasks
@@ -30,9 +140,7 @@ class TasksTree(object):
         self.completed = False
         
         self.closed_time = None
-        self.scheduled_has_time = False
-        self.scheduled_start_time = None
-        self.scheduled_end_time = None
+        self.schedule_time = None
         
     def __getitem__(self, key):
         return self.subtasks[key]
@@ -49,7 +157,7 @@ class TasksTree(object):
     def __len__(self):
         return len(self.subtasks)
 
-    def update(self, todo=None, completed=None, notes=None, scheduled_has_time=None, scheduled_start_time=None, scheduled_end_time=None):
+    def update(self, todo=None, completed=None, closed_time=None, schedule_time=None, notes=None):
         if todo is not None:
             self.todo = todo
             
@@ -60,17 +168,11 @@ class TasksTree(object):
         if notes is not None:
             self.notes = notes
 
-        if completed and not self.closed_time:
-            self.closed_time = datetime.datetime.now()
+        if closed_time is not None:
+            self.closed_time = closed_time
 
-        if scheduled_has_time is not None:
-            self.scheduled_has_time = scheduled_has_time
-
-        if scheduled_start_time is not None:
-            self.scheduled_start_time = scheduled_start_time
-
-        if scheduled_end_time is not None:
-            self.scheduled_end_time = scheduled_end_time
+        if schedule_time is not None:
+            self.schedule_time = schedule_time
         
         return self
 
@@ -112,11 +214,11 @@ class TasksTree(object):
             for match in matches:                
                 if len(match[0]) > 0:
                     note_string = False
-                    _, self.closed_time, _ = from_emacs_date_format(match[0])
+                    self.closed_time = OrgDate.parse_org_format(match[0])
 
                 if len(match[1]) > 0:
                     note_string = False
-                    self.scheduled_has_time, self.scheduled_start_time, self.scheduled_end_time = from_emacs_date_format(match[1])
+                    self.schedule_time = OrgDate.parse_org_format(match[1])
                     
             if note_string:
                 real_notes.append(line)
@@ -138,14 +240,9 @@ class TasksTree(object):
 
             time_line = [' ' * (level + 1)]
             if subtask.closed_time:
-                time_line.append("CLOSED: [{0}]".format(
-                                 to_emacs_date_format(True, subtask.closed_time)))
-            if subtask.scheduled_start_time:
-                time_line.append("SCHEDULED: <{0}>".format(
-                                 to_emacs_date_format(
-                                     subtask.scheduled_has_time,
-                                     subtask.scheduled_start_time,
-                                     subtask.scheduled_end_time)))
+                time_line.append("CLOSED: [{0}]".format(subtask.closed_time.to_org_format()))
+            if subtask.schedule_time:
+                time_line.append("SCHEDULED: <{0}>".format(subtask.schedule_time.to_org_format()))
             if len(time_line) > 1:
                 res.append(' '.join(time_line))
 

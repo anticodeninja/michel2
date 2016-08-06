@@ -34,15 +34,15 @@ class TestInteractiveMerge(unittest.TestCase):
         
         self.assertEqual(conf.merge_title(m.MergeEntry(tasks[0], tasks[1])), tasks[0].title)
 
-    def test_merge_scheduled_start_time(self):
+    def test_merge_schedule_time(self):
         conf = m.InteractiveMergeConf(TestAdapter())
         tasks = [
             m.TasksTree('!!!Choose earlier!!!').update(
-                scheduled_start_time=datetime.datetime(2015, 12, 15, tzinfo = m.LocalTzInfo())),
+                schedule_time=m.OrgDate(datetime.date(2015, 12, 15))),
             m.TasksTree('Press Ctrl-D').update(
-                scheduled_start_time=datetime.datetime(2015, 12, 10, tzinfo = m.LocalTzInfo()))]
+                schedule_time=m.OrgDate(datetime.date(2015, 12, 10)))]
         
-        self.assertEqual(conf.merge_scheduled_start_time(m.MergeEntry(tasks[0], tasks[1])), tasks[1].scheduled_start_time)
+        self.assertEqual(conf.merge_schedule_time(m.MergeEntry(tasks[0], tasks[1])), tasks[1].schedule_time)
 
     def test_merge_notes(self):        
         conf = m.InteractiveMergeConf(TestAdapter())

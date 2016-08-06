@@ -8,11 +8,9 @@ import locale
 import re
 import sys
 
-default_locale = locale.setlocale(locale.LC_TIME, '')
-locale.setlocale(locale.LC_TIME, 'C')
+import michel as m
 
 google_time_regex = re.compile("(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+).+")
-emacs_time_regex = re.compile("(\d+)-(\d+)-(\d+) \S+(?: (\d+):(\d+)(?:-(\d+):(\d+))?)?")
 
 class LocalTzInfo(datetime.tzinfo):
     _offset = datetime.timedelta(seconds = -time.timezone)
@@ -27,58 +25,10 @@ class LocalTzInfo(datetime.tzinfo):
 
 def from_google_date_format(value):
     time = [int(x) for x in google_time_regex.findall(value)[0] if len(x) > 0]
-    
-    first_time = datetime.datetime(time[0], time[1], time[2],
-                                   time[3], time[4],
-                                   tzinfo = LocalTzInfo())
-
-    return first_time
+    return m.OrgDate(datetime.date(time[0], time[1], time[2]))
     
 def to_google_date_format(value):
-    return value.strftime("%Y-%m-%dT00:00:00Z")
-
-def from_emacs_date_format(value):
-    time = [int(x) for x in emacs_time_regex.findall(value)[0] if len(x) > 0]
-
-    has_time = False
-    first_time = None
-    second_time = None
-
-    if len(time) == 3:
-        first_time = datetime.datetime(time[0], time[1], time[2],
-                                       tzinfo = LocalTzInfo())
-
-    if len(time) > 3:
-        has_time = True
-        first_time = datetime.datetime(time[0], time[1], time[2],
-                                       time[3], time[4],
-                                       tzinfo = LocalTzInfo())
-        
-    if len(time) > 5:
-        second_time = datetime.datetime(time[0], time[1], time[2],
-                                     time[5], time[6],
-                                     tzinfo = LocalTzInfo())
-
-    return has_time, first_time, second_time
-
-def to_emacs_date_format(has_duration, value, end_value = None):
-    try:
-        old_locale = locale.getlocale(locale.LC_TIME)
-        locale.setlocale(locale.LC_TIME, default_locale)
-        res = value.strftime("%Y-%m-%d %a")
-
-        if has_duration:
-            res += value.strftime(" %H:%M")
-            if end_value:
-                res += end_value.strftime("-%H:%M")
-
-        if os.name == 'nt':
-            # It's hell...
-            res = res.encode('latin-1').decode(locale.getpreferredencoding())
-                                           
-        return res
-    finally:
-        locale.setlocale(locale.LC_TIME, old_locale)    
+    return value.get_date().strftime("%Y-%m-%dT00:00:00Z")
 
 def save_data_path(file_name):
     data_path = os.path.join(os.path.expanduser('~'), ".michel")

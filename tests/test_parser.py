@@ -86,9 +86,10 @@ class TestMichel(unittest.TestCase):
 
         self.assertEqual(len(org_tree), 1)
         self.assertEqual(org_tree[0].title, "Headline B")
-        self.assertTrue(org_tree[0].scheduled_has_time)
-        self.assertEqual(org_tree[0].scheduled_start_time, datetime.datetime(2015, 12, 9, 20, 0, tzinfo = m.LocalTzInfo()))
-        self.assertEqual(org_tree[0].scheduled_end_time, datetime.datetime(2015, 12, 9, 21, 0, tzinfo = m.LocalTzInfo()))
+        self.assertEqual(org_tree[0].schedule_time,
+                         m.OrgDate(datetime.date(2015, 12, 9),
+                                   datetime.time(20, 0),
+                                   datetime.timedelta(hours=1)))
         self.assertEqual(org_tree[0].notes, ["Normal note"])
 
         

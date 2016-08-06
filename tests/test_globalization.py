@@ -21,45 +21,36 @@ class TestMichel(unittest.TestCase):
     def test_format_google_dates(self):
         self.assertEqual("2015-12-09T00:00:00Z",
                          m.to_google_date_format(
-                             datetime.datetime(2015, 12, 9, 20, 00)))
+                             m.OrgDate(datetime.date(2015, 12, 9))))
         self.assertEqual("2015-11-18T00:00:00Z",
                          m.to_google_date_format(
-                             datetime.datetime(2015, 11, 18)))
+                             m.OrgDate(datetime.date(2015, 11, 18))))
         self.assertEqual("2015-12-10T00:00:00Z",
                          m.to_google_date_format(
-                             datetime.datetime(2015, 12, 10, 3, 25)))
+                             m.OrgDate(datetime.date(2015, 12, 10))))
                          
 
     def test_format_emacs_dates(self):
-        import michel.utils as mu
-
         test_locale = getLocaleAlias('ru')
         if test_locale:
-            mu.default_locale = test_locale
+            m.OrgDate.default_locale = test_locale
             self.assertEqual(
-                "2015-12-09 Ср 20:00-21:00",
-                m.to_emacs_date_format(
-                    True,
-                    datetime.datetime(2015, 12, 9, 20, 00),
-                    datetime.datetime(2015, 12, 9, 21, 00)))
+                "2015-12-09 Ср",
+                m.OrgDate(datetime.date(2015, 12, 9)).to_org_format())
 
         test_locale = getLocaleAlias('us')
         if test_locale:
-            mu.default_locale = test_locale
+            m.OrgDate.default_locale = test_locale
             self.assertEqual(
                 "2015-11-18 Wed",
-                m.to_emacs_date_format(
-                    False,
-                    datetime.datetime(2015, 11, 18)))
+                m.OrgDate(datetime.date(2015, 11, 18)).to_org_format())
 
         test_locale = getLocaleAlias('de')
         if test_locale:
-            mu.default_locale = test_locale
+            m.OrgDate.default_locale = test_locale
             self.assertEqual(
-                "2015-12-10 Do 03:25",
-                m.to_emacs_date_format(
-                    True,
-                    datetime.datetime(2015, 12, 10, 3, 25)))
+                "2015-12-10 Do",
+                m.OrgDate(datetime.date(2015, 12, 10)).to_org_format())
 
     def test_unicode_print(self):
         """
@@ -97,8 +88,7 @@ class TestMichel(unittest.TestCase):
 
         
     def test_scheduled_and_closed_time(self):
-        import michel.utils as mu
-        mu.default_locale = getLocaleAlias('us')
+        m.OrgDate.default_locale = getLocaleAlias('us')
         
         org_text = textwrap.dedent("""\
             * Headline 1
@@ -115,32 +105,32 @@ class TestMichel(unittest.TestCase):
         tasktree = m.TasksTree.parse_text(org_text)
         
         self.assertEqual(tasktree[0].closed_time, None)
-        self.assertEqual(tasktree[0].scheduled_start_time, None)
-        self.assertEqual(tasktree[0].scheduled_end_time, None)
-        self.assertFalse(tasktree[0].scheduled_has_time)
+        self.assertEqual(tasktree[0].schedule_time, None)
 
         self.assertEqual(tasktree[1].closed_time, None)
-        self.assertEqual(tasktree[1].scheduled_start_time, datetime.datetime(2015, 11, 18, 0, 0, tzinfo = m.LocalTzInfo()))
-        self.assertEqual(tasktree[1].scheduled_end_time, None)
-        self.assertEqual(m.to_google_date_format(tasktree[1].scheduled_start_time), "2015-11-18T00:00:00Z")
-        self.assertFalse(tasktree[1].scheduled_has_time)
+        self.assertEqual(tasktree[1].schedule_time,
+                         m.OrgDate(datetime.date(2015, 11, 18)))
+        self.assertEqual(m.to_google_date_format(tasktree[1].schedule_time), "2015-11-18T00:00:00Z")
 
         self.assertEqual(tasktree[2].closed_time, None)
-        self.assertEqual(tasktree[2].scheduled_start_time, datetime.datetime(2015, 12, 9, 19, 0, tzinfo = m.LocalTzInfo()))
-        self.assertEqual(tasktree[2].scheduled_end_time, datetime.datetime(2015, 12, 9, 20, 0, tzinfo = m.LocalTzInfo()))
-        self.assertEqual(m.to_google_date_format(tasktree[2].scheduled_start_time), "2015-12-09T00:00:00Z")
-        self.assertTrue(tasktree[2].scheduled_has_time)
+        self.assertEqual(tasktree[2].schedule_time,
+                         m.OrgDate(datetime.date(2015, 12, 9),
+                                   datetime.time(19, 0),
+                                   datetime.timedelta(hours=1)))
+        self.assertEqual(m.to_google_date_format(tasktree[2].schedule_time), "2015-12-09T00:00:00Z")
 
-        self.assertEqual(tasktree[3].closed_time, datetime.datetime(2015, 12, 10, 3, 25, tzinfo = m.LocalTzInfo()))
-        self.assertEqual(tasktree[3].scheduled_start_time, None)
-        self.assertEqual(tasktree[3].scheduled_end_time, None)
-        self.assertFalse(tasktree[3].scheduled_has_time)
+        self.assertEqual(tasktree[3].closed_time,
+                         m.OrgDate(datetime.date(2015, 12, 10),
+                                   datetime.time(3, 25)))
+        self.assertEqual(tasktree[3].schedule_time, None)
 
-        self.assertEqual(tasktree[4].closed_time, datetime.datetime(2015, 12, 10, 3, 25, tzinfo = m.LocalTzInfo()))
-        self.assertEqual(tasktree[4].scheduled_start_time, datetime.datetime(2015, 12, 9, 3, 0, tzinfo = m.LocalTzInfo()))
-        self.assertEqual(tasktree[4].scheduled_end_time, None)
-        self.assertEqual(m.to_google_date_format(tasktree[4].scheduled_start_time), "2015-12-09T00:00:00Z")
-        self.assertTrue(tasktree[4].scheduled_has_time)
+        self.assertEqual(tasktree[4].closed_time,
+                         m.OrgDate(datetime.date(2015, 12, 10),
+                                   datetime.time(3, 25)))
+        self.assertEqual(tasktree[4].schedule_time,
+                         m.OrgDate(datetime.date(2015, 12, 9),
+                                   datetime.time(3, 0)))
+        self.assertEqual(m.to_google_date_format(tasktree[4].schedule_time), "2015-12-09T00:00:00Z")
                          
         self.assertEqual(str(tasktree), org_text)
 
