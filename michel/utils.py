@@ -8,27 +8,39 @@ import locale
 import re
 import sys
 
+from importlib.machinery import SourceFileLoader
+
 import michel as m
 
-google_time_regex = re.compile("(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+).+")
+_url_regex = re.compile("(\w+)://([\w/]+)(?:\?([\w=&]+))?")
 
-class LocalTzInfo(datetime.tzinfo):
-    _offset = datetime.timedelta(seconds = -time.timezone)
-    _dst = datetime.timedelta(seconds = time.altzone - time.timezone if time.daylight else 0)
-    _name = time.tzname
-    def utcoffset(self, dt):
-        return self.__class__._offset
-    def dst(self, dt):
-        return self.__class__._dst
-    def tzname(self, dt):
-        return self.__class__._name
-
-def from_google_date_format(value):
-    time = [int(x) for x in google_time_regex.findall(value)[0] if len(x) > 0]
-    return m.OrgDate(datetime.date(time[0], time[1], time[2]))
+def parse_provider_url(url):
+    matches = _url_regex.findall(url)
     
-def to_google_date_format(value):
-    return value.get_date().strftime("%Y-%m-%dT00:00:00Z")
+    protocol = matches[0][0]
+    path = matches[0][1].split("/")
+    params = dict(x.split("=") for x in matches[0][2].split("&")) if len(matches[0][2]) > 0 else None
+    
+    return protocol, path, params
+
+def get_provider(url):
+    protocol, path, params = m.parse_provider_url(url)
+    dirname = os.path.dirname(__file__)
+    provider_name = (protocol + "provider").lower()
+
+    for filename in os.listdir(dirname):
+        name, ext = os.path.splitext(os.path.basename(filename))
+        if name == "__init__" or name == "__main__" or ext != ".py":
+            continue
+
+        temp = SourceFileLoader(name, os.path.join(dirname, filename)).load_module()
+        for entryname in dir(temp):
+            if entryname.lower() != provider_name:
+                continue
+
+            return getattr(temp, entryname)(path, params)
+
+    raise Exception("Provider does not found")
 
 def save_data_path(file_name):
     data_path = os.path.join(os.path.expanduser('~'), ".michel")

@@ -11,14 +11,14 @@ import shutil
 import sys
 import json
 import locale
+import argparse
 
 from michel.utils import *
-from michel.gtasks import *
 from michel.mergetask import *
 from michel.mergeconf import *
 from michel.tasktree import *
         
-def print_todolist(profile, list_name=None):
+def print_todolist(url):
     """Print an orgmode-formatted string representing a google tasks list.
     
     The Google Tasks list named *list_name* is used.  If *list_name* is not
@@ -26,11 +26,11 @@ def print_todolist(profile, list_name=None):
     
     """
 
-    gtask_provider = GTaskProvider(profile, list_name)
-    gtask_provider.pull()
-    print(gtask_provider.get_tasks())
+    provider = get_provider(url)
+    provider.pull()
+    print(provider.get_tasks())
 
-def write_todolist(path, profile, list_name=None):
+def write_todolist(path, url):
     """Create an orgmode-formatted file representing a google tasks list.
     
     The Google Tasks list named *list_name* is used.  If *list_name* is not
@@ -43,9 +43,9 @@ def write_todolist(path, profile, list_name=None):
         print("The org-file you want to synchronize does not exist.")
         sys.exit(2)
 
-    gtask_provider = GTaskProvider(profile, list_name)
-    gtask_provider.pull()
-    gtask_provider.get_tasks().write_file(path)
+    provider = get_provider(url)
+    provider.pull()
+    provider.get_tasks().write_file(path)
 
 def push_todolist(org_path, profile, list_name, only_todo):
     """Pushes the specified file to the specified todolist"""
@@ -56,14 +56,14 @@ def push_todolist(org_path, profile, list_name, only_todo):
         sys.exit(2)
     org_tree = TasksTree.parse_file(org_path)
 
-    gtask_provider = GTaskProvider(profile, list_name)
-    gtask_provider.erase()
-    remote_tree = gtask_provider.get_tasks()
+    provider = get_provider(url)
+    provider.erase()
+    remote_tree = provider.get_tasks()
 
-    sync_plan = treemerge(org_tree, remote_tree, None, InteractiveMergeConf(gtask_provider, only_todo))
-    gtask_provider.sync(sync_plan)
+    sync_plan = treemerge(org_tree, remote_tree, None, InteractiveMergeConf(provider, only_todo))
+    provider.sync(sync_plan)
 
-def sync_todolist(org_path, profile, list_name, only_todo):
+def sync_todolist(org_path, url, only_todo):
     """Synchronizes the specified file with the specified todolist"""
 
     org_path = os.path.expanduser(org_path)
@@ -72,15 +72,15 @@ def sync_todolist(org_path, profile, list_name, only_todo):
         sys.exit(2)
     org_tree = TasksTree.parse_file(org_path)
 
-    gtask_provider = GTaskProvider(profile, list_name)
-    gtask_provider.pull()
-    remote_tree = gtask_provider.get_tasks()
+    provider = get_provider(url)
+    provider.pull()
+    remote_tree = provider.get_tasks()
 
     base_path = os.path.splitext(org_path)[0] + ".base"
     base_tree = TasksTree.parse_file(base_path) if os.path.exists(base_path) else None
     
-    sync_plan = treemerge(org_tree, remote_tree, base_tree, InteractiveMergeConf(gtask_provider, only_todo))
-    gtask_provider.sync(sync_plan)
+    sync_plan = treemerge(org_tree, remote_tree, base_tree, InteractiveMergeConf(provider, only_todo))
+    provider.sync(sync_plan)
     codecs.open(org_path, "w", "utf-8").write(str(org_tree))
     codecs.open(base_path, "w", "utf-8").write(str(org_tree))
 
@@ -104,15 +104,8 @@ def main():
     parser.add_argument('--orgfile',
             metavar='FILE',
             help='An org-mode file to push from / pull to')
-    # TODO: replace the --profile flag with a URL-like scheme for specifying
-    # data sources. (e.g. using file:///path/to/orgfile or
-    # gtasks://profile/listname, and having only --from and --to flags)
-    parser.add_argument('--profile',
-            default="__default",
-            required=False,
-            help='A user-defined profile name to distinguish between '
-                 'different google accounts')
-    parser.add_argument('--listname',
+
+    parser.add_argument('--url',
             help='A GTasks list to pull from / push to (default list if empty)')
     
     args = parser.parse_args()
@@ -129,13 +122,13 @@ def main():
     
     if args.pull:
         if args.orgfile is None:
-            print_todolist(args.profile, args.listname)
+            print_todolist(args.url)
         else:
-            write_todolist(args.orgfile, args.profile, args.listname)
+            write_todolist(args.orgfile, args.url)
     elif args.push:
-        push_todolist(args.orgfile, args.profile, args.listname, args.only_todo)
+        push_todolist(args.orgfile, args.url, args.only_todo)
     elif args.sync:
-        sync_todolist(args.orgfile, args.profile, args.listname, args.only_todo)
+        sync_todolist(args.orgfile, args.url, args.only_todo)
     elif args.script:
         try:
             scripts = [".michel-profile", save_data_path("profile")]
@@ -150,14 +143,14 @@ def main():
             actions = json.load(actions_file)
         for entry in actions:
             if entry['action'] == 'sync':
-                print ("Sync {0} <-> {1}:{2}".format(entry['org_file'], entry['profile'], entry['listname']))
-                sync_todolist(entry['org_file'], entry['profile'], entry['listname'], entry['only_todo'])
+                print ("Sync {0} <-> {1}".format(entry['org_file'], entry['url']))
+                sync_todolist(entry['org_file'], entry['url'], entry['only_todo'])
             elif entry['action'] == 'push':
-                print ("Push {0} -> {1}:{2}".format(entry['org_file'], entry['profile'], entry['listname']))
-                push_todolist(entry['org_file'], entry['profile'], entry['listname'], entry['only_todo'])
+                print ("Push {0} -> {1}".format(entry['org_file'], entry['url']))
+                push_todolist(entry['org_file'], entry['url'], entry['only_todo'])
             elif entry['action'] == 'pull':
-                print ("Pull {0} <- {1}:{2}".format(entry['org_file'], entry['profile'], entry['listname']))
-                write_todolist(entry['org_file'], entry['profile'], entry['listname'])
+                print ("Pull {0} <- {1}".format(entry['org_file'], entry['url']))
+                write_todolist(entry['org_file'], entry['url'])
         
 if __name__ == "__main__":
     main()

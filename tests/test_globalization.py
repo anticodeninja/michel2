@@ -17,17 +17,6 @@ from michel.utils import *
 from tests import getLocaleAlias
 
 class TestMichel(unittest.TestCase):
-
-    def test_format_google_dates(self):
-        self.assertEqual("2015-12-09T00:00:00Z",
-                         m.to_google_date_format(
-                             m.OrgDate(datetime.date(2015, 12, 9))))
-        self.assertEqual("2015-11-18T00:00:00Z",
-                         m.to_google_date_format(
-                             m.OrgDate(datetime.date(2015, 11, 18))))
-        self.assertEqual("2015-12-10T00:00:00Z",
-                         m.to_google_date_format(
-                             m.OrgDate(datetime.date(2015, 12, 10))))
                          
 
     def test_format_emacs_dates(self):
@@ -110,14 +99,12 @@ class TestMichel(unittest.TestCase):
         self.assertEqual(tasktree[1].closed_time, None)
         self.assertEqual(tasktree[1].schedule_time,
                          m.OrgDate(datetime.date(2015, 11, 18)))
-        self.assertEqual(m.to_google_date_format(tasktree[1].schedule_time), "2015-11-18T00:00:00Z")
 
         self.assertEqual(tasktree[2].closed_time, None)
         self.assertEqual(tasktree[2].schedule_time,
                          m.OrgDate(datetime.date(2015, 12, 9),
                                    datetime.time(19, 0),
                                    datetime.timedelta(hours=1)))
-        self.assertEqual(m.to_google_date_format(tasktree[2].schedule_time), "2015-12-09T00:00:00Z")
 
         self.assertEqual(tasktree[3].closed_time,
                          m.OrgDate(datetime.date(2015, 12, 10),
@@ -130,7 +117,6 @@ class TestMichel(unittest.TestCase):
         self.assertEqual(tasktree[4].schedule_time,
                          m.OrgDate(datetime.date(2015, 12, 9),
                                    datetime.time(3, 0)))
-        self.assertEqual(m.to_google_date_format(tasktree[4].schedule_time), "2015-12-09T00:00:00Z")
                          
         self.assertEqual(str(tasktree), org_text)
 

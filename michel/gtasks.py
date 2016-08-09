@@ -1,28 +1,30 @@
 import httplib2
 
+import datetime
 import argparse
+import re
 
 from apiclient import discovery
 import oauth2client
 from oauth2client import client
 from oauth2client import tools
 
-from michel.tasktree import TasksTree
-from michel.utils import *
+from michel.tasktree import TasksTree, OrgDate
+from michel import utils
 
-sys_regex = re.compile(":PARENT: (.*)")
+class GtaskProvider:
+    _sys_regex = re.compile(":PARENT: (.*)")
+    _google_time_regex = re.compile("(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+).+")
 
-class GTaskProvider:
-
-    def __init__(self, profile_name, list_name):
-        self.__profile_name = profile_name
-        self.__list_name = list_name
+    def __init__(self, path, params):
+        self._profile_name = path[0]
+        self._list_name = path[1]
         
-        self.__tasks_tree = None
-        self.__task_id_map = None
-        self.__id_task_map = None
+        self._tasks_tree = None
+        self._task_id_map = None
+        self._id_task_map = None
         
-        self.__init_service()
+        self._init_service()
 
     def merge_schedule_time(self, default, mapping):
         remote = mapping.remote.schedule_time
@@ -41,14 +43,14 @@ class GTaskProvider:
         return mapping.org.schedule_time
 
     def get_tasks(self):
-        return self.__tasks_tree
+        return self._tasks_tree
 
     def erase(self):
         """Erases the todo list of given id"""
         
-        tasks = self.__service.tasks().list(tasklist=self.__list_id).execute()
+        tasks = self._service.tasks().list(tasklist=self._list_id).execute()
         for task in tasks.get('items', []):
-            self.__service.tasks().delete(tasklist=self.__list_id, task=task['id']).execute()
+            self._service.tasks().delete(tasklist=self._list_id, task=task['id']).execute()
 
         self.pull()
             
@@ -61,12 +63,12 @@ class GTaskProvider:
                     continue
                 
                 notes = [x for x in task.notes]
-                parent = self.__tasks_tree.find_parent(task)
+                parent = self._tasks_tree.find_parent(task)
                 gparent = None
 
                 if parent:
-                    if parent in self.__task_id_map:
-                        gparent = self.__task_id_map[parent]
+                    if parent in self._task_id_map:
+                        gparent = self._task_id_map[parent]
                     elif parent.title:
                         notes.insert(0, ':PARENT: ' + parent_task)
                         
@@ -77,18 +79,18 @@ class GTaskProvider:
                 }
                 
                 if task.closed_time is not None:
-                    gtask['completed'] = to_google_date_format(task.closed_time)
+                    gtask['completed'] = self._to_google_date_format(task.closed_time)
                 
                 if task.schedule_time is not None:
-                    gtask['due'] = to_google_date_format(task.schedule_time)
+                    gtask['due'] = self._to_google_date_format(task.schedule_time)
 
-                res = self.__service.tasks().insert(
-                    tasklist=self.__list_id,
+                res = self._service.tasks().insert(
+                    tasklist=self._list_id,
                     parent=gparent,
                     body=gtask
                 ).execute()
                 
-                self.__task_id_map[task] = res['id']
+                self._task_id_map[task] = res['id']
                 
             elif item['action'] == 'update':
                 gtask = {}
@@ -99,36 +101,36 @@ class GTaskProvider:
                 if 'completed' in item['changes']:
                     if task.completed:
                         gtask['status'] = 'completed'
-                        gtask['completed'] = to_google_date_format(task.closed_time)
+                        gtask['completed'] = self._to_google_date_format(task.closed_time)
                     else:
                         gtask['status'] = 'needsAction'
                         gtask['completed'] = None
                 if 'schedule_time' in item['changes']:
-                    gtask['due'] = to_google_date_format(task.schedule_time)
+                    gtask['due'] = self._to_google_date_format(task.schedule_time)
 
                 if len(gtask) == 0:
                     continue
 
-                self.__service.tasks().patch(
-                    tasklist=self.__list_id,
-                    task=self.__task_id_map[task],
+                self._service.tasks().patch(
+                    tasklist=self._list_id,
+                    task=self._task_id_map[task],
                     body=gtask
                 ).execute()  
             
             elif item['action'] == 'remove':
-                task_id = self.__task_id_map[task]
+                task_id = self._task_id_map[task]
 
-                self.__service.tasks().delete(
-                    tasklist=self.__list_id,
+                self._service.tasks().delete(
+                    tasklist=self._list_id,
                     task=task_id
                 ).execute()
 
-                parent = self.__tasks_tree.find_parent(task)
+                parent = self._tasks_tree.find_parent(task)
                 if parent is not None:
                     parent.remove_subtask(task)
                 
-                del self.__id_task_map[task_id]
-                del self.__task_id_map[task]
+                del self._id_task_map[task_id]
+                del self._task_id_map[task]
     
     def pull(self):
         """Get a TaskTree object representing a google tasks list.
@@ -138,12 +140,12 @@ class GTaskProvider:
         the default Google-Tasks list will be used.
         
         """
-        tasks = self.__service.tasks().list(tasklist=self.__list_id).execute()
+        tasks = self._service.tasks().list(tasklist=self._list_id).execute()
         tasklist = [t for t in tasks.get('items', [])]
 
-        self.__tasks_tree = TasksTree(None)
-        self.__task_id_map = {}
-        self.__id_task_map = {}
+        self._tasks_tree = TasksTree(None)
+        self._task_id_map = {}
+        self._id_task_map = {}
 
         fail_count = 0
         while tasklist != [] and fail_count < 1000:
@@ -153,26 +155,26 @@ class GTaskProvider:
                 if len(title) == 0:
                     continue
                 
-                if 'parent' in gtask and gtask['parent'] in self.__id_task_map:
-                    parent_task = self.__id_task_map[gtask['parent']]
+                if 'parent' in gtask and gtask['parent'] in self._id_task_map:
+                    parent_task = self._id_task_map[gtask['parent']]
                 else:
-                    parent_task = self.__tasks_tree
+                    parent_task = self._tasks_tree
 
                 task = parent_task.add_subtask(title)
                 
-                self.__id_task_map[gtask['id']] = task
-                self.__task_id_map[task] = gtask['id']
+                self._id_task_map[gtask['id']] = task
+                self._task_id_map[task] = gtask['id']
 
                 task.todo = True
                 task.completed = gtask['status'] == 'completed'
-                task.schedule_time = from_google_date_format(gtask['due']) if 'due' in gtask else None
-                task.closed_time = from_google_date_format(gtask['completed']) if 'completed' in gtask else None
+                task.schedule_time = self._from_google_date_format(gtask['due']) if 'due' in gtask else None
+                task.closed_time = self._from_google_date_format(gtask['completed']) if 'completed' in gtask else None
                     
                 task.notes = []
                 if 'notes' in gtask:
                     for note_line in gtask['notes'].split('\n'):
                         note_line = note_line.strip()
-                        if sys_regex.match(note_line):
+                        if self._sys_regex.match(note_line):
                             continue
                         
                         if len(note_line) > 0:
@@ -181,7 +183,7 @@ class GTaskProvider:
             except ValueError:
                 fail_count += 1
 
-    def __init_service(self):
+    def _init_service(self):
         """
         Handle oauth's shit (copy-pasta from
         http://code.google.com/apis/tasks/v1/using.html)
@@ -189,7 +191,7 @@ class GTaskProvider:
         http://stackoverflow.com/questions/7274554/why-google-native-oauth2-flow-require-client-secret
         """
         
-        storage = oauth2client.file.Storage(save_data_path("gtasks_oauth.dat"))
+        storage = oauth2client.file.Storage(utils.save_data_path("gtasks_oauth.dat"))
         credentials = storage.get()
         if not credentials or credentials.invalid:
             flow = client.OAuth2WebServerFlow(
@@ -202,17 +204,25 @@ class GTaskProvider:
             
         http = httplib2.Http()
         http = credentials.authorize(http)
-        self.__service = discovery.build(serviceName='tasks', version='v1', http=http)
+        self._service = discovery.build(serviceName='tasks', version='v1', http=http)
         
-        if self.__list_name is None:
-            self.__list_id = "@default"
+        if self._list_name is None or self._list_name == "default":
+            self._list_id = "@default"
         else:
-            tasklists = self.__service.tasklists().list().execute()
+            tasklists = self._service.tasklists().list().execute()
             for tasklist in tasklists['items']:
-                if tasklist['title'] == self.__list_name:
-                    self.__list_id = tasklist['id']
+                if tasklist['title'] == self._list_name:
+                    self._list_id = tasklist['id']
                     break
 
-        if not self.__list_id:
-            raise Exception('ERROR: No google task-list named "{0}"'.format(self.__list_name))
+        if not self._list_id:
+            raise Exception('ERROR: No google task-list named "{0}"'.format(self._list_name))
 
+    @classmethod
+    def _from_google_date_format(self, value):
+        time = [int(x) for x in self._google_time_regex.findall(value)[0] if len(x) > 0]
+        return OrgDate(datetime.date(time[0], time[1], time[2]))
+
+    @classmethod
+    def _to_google_date_format(self, value):
+        return value.get_date().strftime("%Y-%m-%dT00:00:00Z")
