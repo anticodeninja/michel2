@@ -106,7 +106,10 @@ class GtaskProvider:
                         gtask['status'] = 'needsAction'
                         gtask['completed'] = None
                 if 'schedule_time' in item['changes']:
-                    gtask['due'] = self._to_google_date_format(task.schedule_time)
+                    if task.schedule_time:
+                        gtask['due'] = self._to_google_date_format(task.schedule_time)
+                    else:
+                        gtask['due'] = None
 
                 if len(gtask) == 0:
                     continue
