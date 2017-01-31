@@ -1,5 +1,7 @@
 import httplib2
 
+import os
+import sys
 import datetime
 import argparse
 import re
@@ -11,6 +13,21 @@ from oauth2client import tools
 
 from michel.tasktree import TasksTree, OrgDate
 from michel import utils
+
+if 'HTTP_PROXY' in os.environ:
+    try:
+        import socks
+        http_proxy = re.match("^(?P<scheme>http|https|socks):\/\/(?:(?P<username>[^:]+):(?P<password>[^@]+)@)?(?P<address>[^:]+)(?::(?P<port>\d+))?$", os.environ['HTTP_PROXY'])
+        socks.set_default_proxy(socks.HTTP,
+                                http_proxy.group('address'),
+                                int(http_proxy.group('port')),
+                                username=http_proxy.group('username'),
+                                password=http_proxy.group('password'))
+        socks.wrap_module(httplib2)
+    except:
+        print("HTTP Proxy cannot be used, please install pysocks", file=sys.stderr)
+        sys.exit(1)
+
 
 class GtaskProvider:
     _sys_regex = re.compile(":PARENT: (.*)")
