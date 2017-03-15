@@ -224,7 +224,7 @@ class GtaskProvider:
             
         http = httplib2.Http()
         http = credentials.authorize(http)
-        self._service = discovery.build(serviceName='tasks', version='v1', http=http)
+        self._service = discovery.build(serviceName='tasks', version='v1', http=http, cache_discovery=False)
         
         if self._list_name is None or self._list_name == "default":
             self._list_id = "@default"

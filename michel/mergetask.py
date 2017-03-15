@@ -145,7 +145,7 @@ def treemerge(tree_org, tree_remote, tree_base, conf):
         
         while index_org < len(tasks_org):
             if tasks_remote[index_remote].is_title_equal(tasks_org[index_org]):
-                if not tasks_org[index_remote].repeated and not tasks_remote[index_remote].repeated:
+                if not tasks_org[index_org].repeated and not tasks_remote[index_remote].repeated:
                     mapped_tasks.append(MergeEntry(tasks_org.pop(index_org), tasks_remote.pop(index_remote)))
                 else:
                     _merge_repeated_tasks(mapped_tasks, tasks_org, tasks_remote, index_org, index_remote)
@@ -177,7 +177,7 @@ def treemerge(tree_org, tree_remote, tree_base, conf):
         index_base = 0
 
         while index_base < len(tasks_base):
-            if mapped_tasks[index_mapping].org.is_fully_equal(tasks_base[index_base]) or \
+            if mapped_tasks[index_mapping].org.is_fully_equal(tasks_base[index_base]) or\
                mapped_tasks[index_mapping].remote.is_fully_equal(tasks_base[index_base]):
                 mapped_tasks[index_mapping].base = tasks_base.pop(index_base)
                 break

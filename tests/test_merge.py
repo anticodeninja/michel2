@@ -38,7 +38,6 @@ class TestMergeConf:
         if mapping.remote.title == "Headline B3":
             return mapping.org.title
 
-        import ipdb; ipdb.set_trace()
         raise Exception("Undefined behavior")
 
     def merge_completed(self, mapping):
@@ -58,8 +57,9 @@ class TestMergeConf:
         raise Exception("Undefined behavior")
 
     def merge_notes(self, mapping):
-        if mapping.remote.notes == ['New B2 body text.']:
-            return mapping.remote.notes
+        items = [x for x in [mapping.org.notes, mapping.remote.notes] if len(x) > 0]
+        if len(items) == 1:
+            return items[0]
 
         raise Exception("Undefined behavior")
 
@@ -77,6 +77,68 @@ class TestAdapterFor3Way:
 
 
 class TestMichel(unittest.TestCase):
+
+    def test_org_date(self):
+        reference = m.OrgDate(datetime.date(2016, 8, 5),
+                              datetime.time(12, 0))
+        same = m.OrgDate(datetime.date(2016, 8, 5),
+                         datetime.time(12, 0))
+        earlier = m.OrgDate(datetime.date(2016, 8, 4),
+                         datetime.time(12, 0))
+        later = m.OrgDate(datetime.date(2016, 8, 5),
+                          datetime.time(12, 45))
+
+        self.assertEqual(reference, same)
+        self.assertEqual(earlier < reference, True)
+        self.assertEqual(reference < later, True)
+        self.assertEqual(min(later, earlier, reference), earlier)
+
+    def test_todo_only(self):
+        org_text = textwrap.dedent("""\
+            * NotTodoEntry
+            ** NotTodoEntry1
+            * TODO TodoEntry
+            * DONE CompletedTodoEntry
+            * TODO TodoEntry2NotTodoEntry
+            * NotTodoEntry2TodoEntry2
+            * ExtNotTodoEntry
+            ** ExtNotIntNotTodoEntry
+            ** TODO ExtNotIntTodoEntry
+            * TODO ExtTodoEntry
+            ** ExtIntNotTodoEntry
+            ** TODO ExtIntTodoEntry
+            """)
+        result_text = textwrap.dedent("""\
+            * NotTodoEntry
+            ** NotTodoEntry1
+            ** NotTodoEntry2
+            * TODO TodoEntry
+            * DONE CompletedTodoEntry
+            * TODO TodoEntry2NotTodoEntry
+            * NotTodoEntry2TodoEntry2
+            * ExtNotTodoEntry
+            ** ExtNotIntNotTodoEntry
+            ** TODO ExtNotIntTodoEntry
+            * TODO ExtTodoEntry
+            ** ExtIntNotTodoEntry
+            ** TODO ExtIntTodoEntry
+            """)
+        
+        org_tree = m.TasksTree.parse_text(org_text)
+
+        remote_tree = m.TasksTree(None)
+        remote_tasks = [
+            remote_tree.add_subtask('NotTodoEntry').update(
+                completed=True,
+                closed_time=m.OrgDate.now()),
+            remote_tree.add_subtask('Headline C').update(
+                completed=True,
+                closed_time=m.OrgDate.now()),
+            remote_tree.add_subtask('Headline D').update(
+                todo=True),
+            remote_tree.add_subtask('Headline G').update(
+                todo=True)
+        ]
         
     def test_safemerge(self):
     
@@ -86,7 +148,6 @@ class TestMichel(unittest.TestCase):
             ** Headline A2.1
             * Headline B1
             ** Headline B1.1
-               Remote append B1.1 body text.
             * Headline B2
             """)
         org_tree = m.TasksTree.parse_text(org_text)
@@ -298,21 +359,6 @@ class TestMichel(unittest.TestCase):
               SCHEDULED: <2015-12-09 Wed>
             """.format(m.OrgDate.now().to_org_format()))
         self.assertEqual(str(org_tree), result_text)
-
-    def test_org_date(self):
-        reference = m.OrgDate(datetime.date(2016, 8, 5),
-                              datetime.time(12, 0))
-        same = m.OrgDate(datetime.date(2016, 8, 5),
-                         datetime.time(12, 0))
-        earlier = m.OrgDate(datetime.date(2016, 8, 4),
-                         datetime.time(12, 0))
-        later = m.OrgDate(datetime.date(2016, 8, 5),
-                          datetime.time(12, 45))
-
-        self.assertEqual(reference, same)
-        self.assertEqual(earlier < reference, True)
-        self.assertEqual(reference < later, True)
-        self.assertEqual(min(later, earlier, reference), earlier)
 
     def test_3way_merge(self):
         m.OrgDate.default_locale = getLocaleAlias('us')

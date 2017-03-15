@@ -13,7 +13,6 @@ import michel as m
 class TestMichel(unittest.TestCase):
 
     def test_text_to_tasktree(self):
-        # text should have trailing "\n" character, like most textfiles
         org_text = textwrap.dedent("""\
             * Headline 1
             Body 1a
@@ -36,11 +35,9 @@ class TestMichel(unittest.TestCase):
         """
         Test the case where the first lines of an org-mode file are not
         org-mode headlines.
-        
         """
-        # text should have trailing "\n" character, like most textfiles
+        
         org_text = textwrap.dedent("""\
-
             Some non-headline text...
             Another line of it.
             * Headline 1
@@ -56,11 +53,10 @@ class TestMichel(unittest.TestCase):
     def test_no_headlines(self):
         """
         Test the cases where there are no headlines at all in the file.
-        
         """
+        
         # text should have trailing "\n" character, like most textfiles
         org_text = textwrap.dedent("""\
-
             Some non-headline text...
             Another line of it.
             """)
@@ -91,6 +87,7 @@ class TestMichel(unittest.TestCase):
                                    datetime.time(20, 0),
                                    datetime.timedelta(hours=1)))
         self.assertEqual(org_tree[0].notes, ["Normal note"])
+        self.assertEqual(str(org_tree), org_text)
 
         
 if __name__ == '__main__':

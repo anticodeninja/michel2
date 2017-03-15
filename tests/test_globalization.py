@@ -76,7 +76,7 @@ class TestMichel(unittest.TestCase):
             self.fail("TasksTree.write_to_orgfile() raised UnicodeDecodeError")
 
         
-    def test_scheduled_and_closed_time(self):
+    def test_parse_scheduled_and_closed_time(self):
         m.OrgDate.default_locale = getLocaleAlias('us')
         
         org_text = textwrap.dedent("""\

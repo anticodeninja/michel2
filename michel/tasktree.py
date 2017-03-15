@@ -92,6 +92,9 @@ class OrgDate:
         elif self._date > other._date:
             return False
 
+        if self._start_time is None or other._start_time is None:
+            return False
+                
         if self._start_time < other._start_time:
             return True
         elif self._start_time > other._start_time:
