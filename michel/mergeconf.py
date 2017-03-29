@@ -114,10 +114,6 @@ class InteractiveMergeConf:
         return result
 
     def __merge_title(self, mapping):
-        detected_change = self.__extract_from_base(mapping, 'title')
-        if detected_change is not None:
-            return detected_change
-        
         return self.__select_from([
             "Tasks has different titles",
             "Please manualy choose necessary value:"
@@ -127,10 +123,6 @@ class InteractiveMergeConf:
         ])
 
     def __merge_completed(self, mapping):
-        detected_change = self.__extract_from_base(mapping, 'completed')
-        if detected_change is not None:
-            return detected_change
-
         return self.__select_from([
             "Task \"{0}\" has different values for attribute \"completed\"".format(mapping.org.title),
             "Please manualy choose necessary value:"
@@ -151,10 +143,6 @@ class InteractiveMergeConf:
             return None
 
     def __merge_schedule_time(self, mapping):
-        detected_change = self.__extract_from_base(mapping, 'schedule_time')
-        if detected_change is not None:
-            return detected_change
-        
         return self.__select_from([
             "Task \"{0}\" has different values for attribute \"schedule_time\"".format(mapping.org.title),
             "Please manualy choose necessary value:"
@@ -164,10 +152,6 @@ class InteractiveMergeConf:
         ])
 
     def __merge_notes(self, mapping):
-        detected_change = self.__extract_from_base(mapping, 'notes')
-        if detected_change is not None:
-            return detected_change
-        
         uprint("Task \"{0}\" has different values for attribute \"notes\"".format(mapping.org.title))
         uprint("Please manualy choose necessary:")
         count = 2
@@ -229,22 +213,7 @@ class InteractiveMergeConf:
             
         os.close(temp_fid)
         os.remove(temp_name)
-        return result
-
-    def __extract_from_base(self, mapping, name):
-        if mapping.base is None:
-            return None
-
-        value_org = getattr(mapping.org, name)
-        value_remote = getattr(mapping.remote, name)
-        value_base = getattr(mapping.base, name)
-
-        if value_base == value_org:
-            return value_remote
-        if value_base == value_remote:
-            return value_org
-        return None
-                
+        return result                
 
     def __select_from(self, message, items):
         for l in message:

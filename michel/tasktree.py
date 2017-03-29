@@ -226,6 +226,11 @@ class TasksTree(object):
             if note_string:
                 real_notes.append(line)
 
+        while (len(real_notes) > 0) and (len(real_notes[0].strip()) == 0):
+            real_notes.pop(0)
+        while (len(real_notes) > 0) and (len(real_notes[-1].strip()) == 0):
+            real_notes.pop(-1)
+
         self.notes = real_notes
 
     def _lines(self, level):

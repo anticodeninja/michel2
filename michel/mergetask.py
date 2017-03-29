@@ -63,9 +63,28 @@ def _disassemble_tree(tree, disassemblies):
     _disassemble(tree, None, {})
     disassemblies.sort(key=lambda node: node.hash_sum)
 
+def __extract_from_base(mapping, name):
+    if mapping.base is None:
+        return None
+
+    value_org = getattr(mapping.org, name)
+    value_remote = getattr(mapping.remote, name)
+    value_base = getattr(mapping.base, name)
+
+    if value_base == value_org:
+        return value_remote
+    if value_base == value_remote:
+        return value_org
+    return None
+
 def merge_attr(mapping, attr_name, merge_func, changes_list):
     if getattr(mapping.org, attr_name) != getattr(mapping.remote, attr_name):
-        setattr(mapping.org, attr_name, merge_func(mapping))
+        new_value = None
+        if attr_name in ['title', 'completed', 'schedule_time', 'notes']:
+            new_value = __extract_from_base(mapping, attr_name)
+        if new_value is None:
+            new_value = merge_func(mapping)
+        setattr(mapping.org, attr_name, new_value)
             
     if getattr(mapping.remote, attr_name) != getattr(mapping.org, attr_name):
         setattr(mapping.remote, attr_name, getattr(mapping.org, attr_name))

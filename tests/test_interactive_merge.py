@@ -12,16 +12,13 @@ import datetime
 import locale
 
 import michel as m
-from tests import getLocaleAlias
-
-class TestAdapter:
-    pass
+import tests
 
 @unittest.skipUnless(os.getenv('MANUAL_TESTING'), 'Enable only for manual-testing')
 class TestInteractiveMerge(unittest.TestCase):
 
     def test_select_org_task(self):        
-        conf = m.InteractiveMergeConf(TestAdapter())
+        conf = m.InteractiveMergeConf(tests.TestAdapter())
         tasks = [m.TasksTree('Correct Task'), m.TasksTree('Absolutely Another Task')]
         
         self.assertEqual(conf.select_org_task(m.TasksTree('Select Correct Task'), tasks), 0)
@@ -29,13 +26,13 @@ class TestInteractiveMerge(unittest.TestCase):
         self.assertEqual(conf.select_org_task(m.TasksTree('Discard it'), tasks), 'discard')
 
     def test_merge_title(self):        
-        conf = m.InteractiveMergeConf(TestAdapter())
+        conf = m.InteractiveMergeConf(tests.TestAdapter())
         tasks = [m.TasksTree('Choose it'), m.TasksTree('Do not chouse it')]
         
         self.assertEqual(conf.merge_title(m.MergeEntry(tasks[0], tasks[1])), tasks[0].title)
 
     def test_merge_schedule_time(self):
-        conf = m.InteractiveMergeConf(TestAdapter())
+        conf = m.InteractiveMergeConf(tests.TestAdapter())
         tasks = [
             m.TasksTree('!!!Choose earlier!!!').update(
                 schedule_time=m.OrgDate(datetime.date(2015, 12, 15))),
@@ -45,7 +42,7 @@ class TestInteractiveMerge(unittest.TestCase):
         self.assertEqual(conf.merge_schedule_time(m.MergeEntry(tasks[0], tasks[1])), tasks[1].schedule_time)
 
     def test_merge_notes(self):        
-        conf = m.InteractiveMergeConf(TestAdapter())
+        conf = m.InteractiveMergeConf(tests.TestAdapter())
         tasks = [
             m.TasksTree('Simply choose necessary block').update(
                 notes=["Choose this block", ":) :) :)"]),
