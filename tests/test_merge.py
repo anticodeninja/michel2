@@ -405,64 +405,60 @@ class TestMichel(unittest.TestCase):
         self.assertEqual(assertObj['item'].schedule_time,
                          m.OrgDate(datetime.date(2015, 12, 10)))
 
-    def test_repeated_task_merge(self):
+    def test_repeated_scheduled_task_merge(self):
         # Preparations
         base_tree = m.TasksTree.parse_text("""\
             * TODO RepeatedTask
-              SCHEDULED: <2015-12-09 Wed>
+              SCHEDULED: <2015-12-01 Wed>
             * TODO RepeatedTask
-              SCHEDULED: <2015-12-10 Thu>
+              SCHEDULED: <2015-12-03 Thu>
             * TODO RepeatedTask
-              SCHEDULED: <2015-12-12 Sat>
+              SCHEDULED: <2015-12-05 Sat>
         """)
 
         org_tree = m.TasksTree.parse_text("""\
             * TODO RepeatedTask
-              SCHEDULED: <2015-12-09 Wed>
+              SCHEDULED: <2015-12-01 Wed>
             * TODO RepeatedTask
-              SCHEDULED: <2015-12-10 Thu>
-            * DONE RepeatedTask
-              CLOSED: [2015-12-12 Sat] SCHEDULED: <2015-12-12 Sat>
+              SCHEDULED: <2015-12-03 Thu>
+            * TODO RepeatedTask
+              SCHEDULED: <2015-12-05 Sat>
         """)
 
         remote_tree, indexes = tests.createTestTree([
-            "RepeatedTask", dict(completed=True,
-                                 closed_time=m.OrgDate(datetime.date(2015, 12, 11)),
-                                 schedule_time=m.OrgDate(datetime.date(2015, 12, 11))),
             "RepeatedTask", dict(todo=True,
-                                 schedule_time=m.OrgDate(datetime.date(2015, 12, 9))),
+                                 schedule_time=m.OrgDate(datetime.date(2015, 12, 3))),
             "RepeatedTask", dict(todo=True,
-                                 schedule_time=m.OrgDate(datetime.date(2015, 12, 12))),
+                                 schedule_time=m.OrgDate(datetime.date(2015, 12, 6))),
             "RepeatedTask", dict(todo=True,
-                                 schedule_time=m.OrgDate(datetime.date(2015, 12, 14))),
+                                 schedule_time=m.OrgDate(datetime.date(2015, 12, 8))),
+            "RepeatedTask", dict(todo=True),
         ])
 
         # Actions
-        remote_sync_plan = m.treemerge(org_tree, remote_tree, base_tree, tests.TestMergeConf())
+        remote_sync_plan = m.treemerge(org_tree, remote_tree, base_tree, tests.TestMergeConf([
+            [None, "RepeatedTask", None]
+        ]))
 
         # Verifications
         result_text = textwrap.dedent("""\
             * TODO RepeatedTask
-              SCHEDULED: <2015-12-09 Wed>
-            * DONE RepeatedTask
-              CLOSED: [2015-12-11 Fri] SCHEDULED: <2015-12-11 Fri>
-            * DONE RepeatedTask
-              CLOSED: [2015-12-12 Sat] SCHEDULED: <2015-12-12 Sat>
+              SCHEDULED: <2015-12-01 Tue>
             * TODO RepeatedTask
-              SCHEDULED: <2015-12-14 Mon>
+              SCHEDULED: <2015-12-03 Thu>
+            * TODO RepeatedTask
+              SCHEDULED: <2015-12-06 Sun>
+            * TODO RepeatedTask
+              SCHEDULED: <2015-12-08 Tue>
+            * TODO RepeatedTask
             """)
         self.assertEqual(str(org_tree), result_text)
 
-
-        self.assertEqual(len(remote_sync_plan), 2)
+        self.assertEqual(len(remote_sync_plan), 1)
 
         # Remove RepeatedTask <2015-12-11 Fri>
-        assertObj = next(x for x in remote_sync_plan if x['item'] == indexes[0])
-        self.assertEqual(assertObj['action'], 'remove')
-
-        # Remove RepeatedTask <2015-12-12 Sat>
-        assertObj = next(x for x in remote_sync_plan if x['item'] == indexes[2])
-        self.assertEqual(assertObj['action'], 'remove')
+        assertObj = next(x for x in remote_sync_plan if x['item'] not in indexes)
+        self.assertEqual(assertObj['action'], 'append')
 
 
 if __name__ == '__main__':
