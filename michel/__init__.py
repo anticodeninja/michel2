@@ -17,13 +17,13 @@ from michel.utils import *
 from michel.mergetask import *
 from michel.mergeconf import *
 from michel.tasktree import *
-        
+
 def print_todolist(url):
     """Print an orgmode-formatted string representing a google tasks list.
-    
+
     The Google Tasks list named *list_name* is used.  If *list_name* is not
     specified, then the default Google-Tasks list will be used.
-    
+
     """
 
     provider = get_provider(url)
@@ -32,10 +32,10 @@ def print_todolist(url):
 
 def write_todolist(path, url):
     """Create an orgmode-formatted file representing a google tasks list.
-    
+
     The Google Tasks list named *list_name* is used.  If *list_name* is not
     specified, then the default Google-Tasks list will be used.
-    
+
     """
 
     path = os.path.expanduser(path)
@@ -78,69 +78,60 @@ def sync_todolist(org_path, url, only_todo):
 
     base_path = os.path.splitext(org_path)[0] + ".base"
     base_tree = TasksTree.parse_file(base_path) if os.path.exists(base_path) else None
-    
+
     sync_plan = treemerge(org_tree, remote_tree, base_tree, InteractiveMergeConf(provider, only_todo))
     provider.sync(sync_plan)
     codecs.open(org_path, "w", "utf-8").write(str(org_tree))
     codecs.open(base_path, "w", "utf-8").write(str(org_tree))
 
 def main():
-    parser = argparse.ArgumentParser(description="Synchronize org-mode text" 
-                                     "files with a google-tasks list.")
-    
-    action = parser.add_mutually_exclusive_group()
-    action.add_argument("--push", action='store_true',
-            help='replace LISTNAME with the contents of FILE.')
-    action.add_argument("--pull", action='store_true',
-            help='replace FILE with the contents of LISTNAME.')
-    action.add_argument("--sync", action='store_true',
-            help='synchronize changes between FILE and LISTNAME.')
-    action.add_argument("--script", action='store_true',
-            help='use action from script.')
-    
-    parser.add_argument("--only_todo", action='store_true',
-            help='synchronize only TODO tasks to remote.')
-    
-    parser.add_argument('--orgfile',
-            metavar='FILE',
-            help='An org-mode file to push from / pull to')
+    parser = argparse.ArgumentParser(description="Synchronize org-mode files with cloud.")
 
-    parser.add_argument('--url',
-            help='A GTasks list to pull from / push to (default list if empty)')
-    
+    subparsers = parser.add_subparsers(dest='command', title='commands')
+
+    push_command = subparsers.add_parser('push', help='push the file to cloud.')
+    push_command.add_argument('orgfile')
+    push_command.add_argument('url')
+    push_command.add_argument("--only_todo", action='store_true',
+                              help='push only TODO tasks to cloud.')
+
+    print_command = subparsers.add_parser('print', help='print list from cloud.')
+    print_command.add_argument('url')
+
+    pull_command = subparsers.add_parser('pull', help='pull the file from cloud.')
+    pull_command.add_argument('orgfile')
+    pull_command.add_argument('url')
+
+    sync_command = subparsers.add_parser('sync', help='sync the file with cloud.')
+    sync_command.add_argument('orgfile')
+    sync_command.add_argument('url')
+    sync_command.add_argument("--only_todo", action='store_true',
+                              help='synchronize only TODO tasks with cloud.')
+
+    run_command = subparsers.add_parser('run', help='run actions from script.')
+    run_command.add_argument('script', nargs='?')
+
     args = parser.parse_args()
 
-    if not args.push and not args.sync and not args.pull:
-        args.script = True
-    
-    if args.push and not args.orgfile:
-        parser.error('--orgfile must be specified when using --push')
-    if args.sync and not args.orgfile:
-        parser.error('--orgfile must be specified when using --sync')
-    if args.only_todo and not (args.push or args.sync):
-        parser.error('--todo can be specified only with using --sync or --push')
-    
-    if args.pull:
-        if args.orgfile is None:
-            print_todolist(args.url)
-        else:
-            write_todolist(args.orgfile, args.url)
-    elif args.push:
+    if args.command == 'print':
+        print_todolist(args.url)
+    elif args.command == 'pull':
+        write_todolist(args.orgfile, args.url)
+    elif args.command == 'push':
         push_todolist(args.orgfile, args.url, args.only_todo)
-    elif args.sync:
+    elif args.command == 'sync':
         sync_todolist(args.orgfile, args.url, args.only_todo)
-    elif args.script:
-        try:
-            scripts = [".michel-profile", save_data_path("profile")]
-            script_file = next(x for x in scripts if os.path.exists(x))
-        except:
+    elif args.command == 'run' or not args.command:
+        script_file = getattr(args, 'script', None) or save_data_path("profile")
+        if not os.path.exists(script_file):
             print("The script file does not exist.")
             sys.exit(2)
 
         print("Use actions from script {0}".format(script_file))
-            
+
         with codecs.open(script_file, 'r', 'utf-8') as actions_file:
             actions = json.load(actions_file)
+
         for entry in actions:
             if entry['action'] == 'sync':
                 print ("Sync {0} <-> {1}".format(entry['org_file'], entry['url']))
@@ -151,7 +142,6 @@ def main():
             elif entry['action'] == 'pull':
                 print ("Pull {0} <- {1}".format(entry['org_file'], entry['url']))
                 write_todolist(entry['org_file'], entry['url'])
-        
+
 if __name__ == "__main__":
     main()
-
