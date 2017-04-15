@@ -40,8 +40,7 @@ def write_todolist(path, url):
 
     path = os.path.expanduser(path)
     if not os.path.exists(path):
-        print("The org-file you want to synchronize does not exist.")
-        sys.exit(2)
+        raise Exception("The org-file you want to synchronize does not exist.")
 
     provider = get_provider(url)
     provider.pull()
@@ -52,8 +51,7 @@ def push_todolist(org_path, profile, list_name, only_todo):
 
     org_path = os.path.expanduser(org_path)
     if not os.path.exists(org_path):
-        print("The org-file you want to synchronize does not exist.")
-        sys.exit(2)
+        raise Exception("The org-file you want to synchronize does not exist.")
     org_tree = TasksTree.parse_file(org_path)
 
     provider = get_provider(url)
@@ -68,8 +66,7 @@ def sync_todolist(org_path, url, only_todo):
 
     org_path = os.path.expanduser(org_path)
     if not os.path.exists(org_path):
-        print("The org-file you want to synchronize does not exist.")
-        sys.exit(2)
+        raise Exception("The org-file you want to synchronize does not exist.")
     org_tree = TasksTree.parse_file(org_path)
 
     provider = get_provider(url)
@@ -83,6 +80,34 @@ def sync_todolist(org_path, url, only_todo):
     provider.sync(sync_plan)
     codecs.open(org_path, "w", "utf-8").write(str(org_tree))
     codecs.open(base_path, "w", "utf-8").write(str(org_tree))
+
+def repair_todolist(org_path):
+    """Combine the file with conflicted copies"""
+
+    org_path = os.path.abspath(os.path.expanduser(org_path))
+    if not os.path.exists(org_path):
+        raise Exception("The org-file you want to synchronize does not exist.")
+    
+    file_dir = os.path.dirname(org_path)
+    file_fullname = os.path.basename(org_path)
+    file_name, file_ext = os.path.splitext(file_fullname)
+    
+    conflicts = [x for x in os.listdir(file_dir)
+                 if x.startswith(file_name) and x.endswith(file_ext) and x != file_fullname]
+
+    if len(conflicts) == 0:
+        return
+
+    org_tree = TasksTree.parse_file(org_path)
+
+    for conflict in conflicts:
+        print("Fixing conflicts with {0}".format(conflict))
+        conflict_path = os.path.join(file_dir, conflict)
+        conflict_tree = TasksTree.parse_file(conflict_path)
+        treemerge(org_tree, conflict_tree, None, InteractiveMergeConf({}, False))
+        os.remove(conflict_path)
+
+    codecs.open(org_path, "w", "utf-8").write(str(org_tree))
 
 def main():
     parser = argparse.ArgumentParser(description="Synchronize org-mode files with cloud.")
@@ -108,6 +133,9 @@ def main():
     sync_command.add_argument("--only_todo", action='store_true',
                               help='synchronize only TODO tasks with cloud.')
 
+    repair_command = subparsers.add_parser('repair', help='combine the file with conflicted copies.')
+    repair_command.add_argument('orgfile')
+
     run_command = subparsers.add_parser('run', help='run actions from script.')
     run_command.add_argument('script', nargs='?')
 
@@ -121,6 +149,8 @@ def main():
         push_todolist(args.orgfile, args.url, args.only_todo)
     elif args.command == 'sync':
         sync_todolist(args.orgfile, args.url, args.only_todo)
+    elif args.command == 'repair':
+        repair_todolist(args.orgfile)
     elif args.command == 'run' or not args.command:
         script_file = getattr(args, 'script', None) or save_data_path("profile")
         if not os.path.exists(script_file):
@@ -142,6 +172,9 @@ def main():
             elif entry['action'] == 'pull':
                 print ("Pull {0} <- {1}".format(entry['org_file'], entry['url']))
                 write_todolist(entry['org_file'], entry['url'])
+            elif entry['action'] == 'repair':
+                print ("Repair {0}".format(entry['org_file']))
+                repair_todolist(entry['org_file'])
 
 if __name__ == "__main__":
     main()
