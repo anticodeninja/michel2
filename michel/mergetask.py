@@ -203,7 +203,7 @@ def treemerge(tree_org, tree_remote, tree_base, conf):
         if tasks_remote[index_remote].no_auto:
             index_remote += 1
             continue
-        
+
         is_mapped = False
         index_org = 0
 
@@ -211,7 +211,7 @@ def treemerge(tree_org, tree_remote, tree_base, conf):
             if tasks_org[index_org].no_auto:
                 index_org += 1
                 continue
-            
+
             if tasks_remote[index_remote].is_title_equal(tasks_org[index_org]):
                 if not tasks_org[index_org].repeated and not tasks_remote[index_remote].repeated:
                     mapped_tasks.append(MergeEntry(tasks_org.pop(index_org), tasks_remote.pop(index_remote)))

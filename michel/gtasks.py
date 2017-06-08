@@ -36,11 +36,11 @@ class GtaskProvider:
     def __init__(self, path, params):
         self._profile_name = path[0]
         self._list_name = path[1]
-        
+
         self._tasks_tree = None
         self._task_id_map = None
         self._id_task_map = None
-        
+
         self._init_service()
 
     def merge_schedule_time(self, default, mapping):
@@ -55,7 +55,7 @@ class GtaskProvider:
 
         if remote.year != org.year or remote.month != org.month or remote.day != org.day:
             return default(mapping)
-        
+
         mapping.remote.schedule_time = mapping.org.schedule_time
         return mapping.org.schedule_time
 
@@ -64,21 +64,21 @@ class GtaskProvider:
 
     def erase(self):
         """Erases the todo list of given id"""
-        
+
         tasks = self._service.tasks().list(tasklist=self._list_id).execute()
         for task in tasks.get('items', []):
             self._service.tasks().delete(tasklist=self._list_id, task=task['id']).execute()
 
         self.pull()
-            
+
 
     def sync(self, sync_plan):
         for item in sync_plan:
-            task = item['item']            
+            task = item['item']
             if item['action'] == 'append':
                 if task.title is None:
                     continue
-                
+
                 notes = [x for x in task.notes]
                 parent = self._tasks_tree.find_parent(task)
                 gparent = None
@@ -88,16 +88,16 @@ class GtaskProvider:
                         gparent = self._task_id_map[parent]
                     elif parent.title:
                         notes.insert(0, ':PARENT: ' + parent_task)
-                        
+
                 gtask = {
                     'title': task.title,
                     'notes': '\n'.join(notes),
                     'status': 'completed' if task.completed else 'needsAction'
                 }
-                
+
                 if task.closed_time is not None:
                     gtask['completed'] = self._to_google_date_format(task.closed_time)
-                
+
                 if task.schedule_time is not None:
                     gtask['due'] = self._to_google_date_format(task.schedule_time)
 
@@ -106,9 +106,9 @@ class GtaskProvider:
                     parent=gparent,
                     body=gtask
                 ).execute()
-                
+
                 self._task_id_map[task] = res['id']
-                
+
             elif item['action'] == 'update':
                 gtask = {}
                 if 'title' in item['changes']:
@@ -135,8 +135,8 @@ class GtaskProvider:
                     tasklist=self._list_id,
                     task=self._task_id_map[task],
                     body=gtask
-                ).execute()  
-            
+                ).execute()
+
             elif item['action'] == 'remove':
                 task_id = self._task_id_map[task]
 
@@ -148,20 +148,28 @@ class GtaskProvider:
                 parent = self._tasks_tree.find_parent(task)
                 if parent is not None:
                     parent.remove_subtask(task)
-                
+
                 del self._id_task_map[task_id]
                 del self._task_id_map[task]
-    
+
     def pull(self):
         """Get a TaskTree object representing a google tasks list.
-        
+
         The Google Tasks list named *list_name* is retrieved, and converted into a
         TaskTree object which is returned.  If *list_name* is not specified, then
         the default Google-Tasks list will be used.
-        
+
         """
-        tasks = self._service.tasks().list(tasklist=self._list_id).execute()
-        tasklist = [t for t in tasks.get('items', [])]
+
+        pageToken = None
+        tasklist = []
+        while True:
+            tasks = self._service.tasks().list(tasklist=self._list_id, pageToken=pageToken).execute()
+            tasklist += [t for t in tasks.get('items', [])]
+
+            pageToken = tasks.get('nextPageToken', None)
+            if not pageToken:
+                break
 
         self._tasks_tree = TasksTree(None)
         self._task_id_map = {}
@@ -174,14 +182,14 @@ class GtaskProvider:
                 title = gtask['title'].strip()
                 if len(title) == 0:
                     continue
-                
+
                 if 'parent' in gtask and gtask['parent'] in self._id_task_map:
                     parent_task = self._id_task_map[gtask['parent']]
                 else:
                     parent_task = self._tasks_tree
 
                 task = parent_task.add_subtask(title)
-                
+
                 self._id_task_map[gtask['id']] = task
                 self._task_id_map[task] = gtask['id']
 
@@ -189,17 +197,17 @@ class GtaskProvider:
                 task.completed = gtask['status'] == 'completed'
                 task.schedule_time = self._from_google_date_format(gtask['due']) if 'due' in gtask else None
                 task.closed_time = self._from_google_date_format(gtask['completed']) if 'completed' in gtask else None
-                    
+
                 task.notes = []
                 if 'notes' in gtask:
                     for note_line in gtask['notes'].split('\n'):
                         note_line = note_line.strip()
                         if self._sys_regex.match(note_line):
                             continue
-                        
+
                         if len(note_line) > 0:
                             task.notes.append(note_line)
-                                                                    
+
             except ValueError:
                 fail_count += 1
 
@@ -210,7 +218,7 @@ class GtaskProvider:
         Yes I do publish a secret key here, apparently it is normal
         http://stackoverflow.com/questions/7274554/why-google-native-oauth2-flow-require-client-secret
         """
-        
+
         storage = oauth2client.file.Storage(utils.save_data_path("gtasks_oauth.dat"))
         credentials = storage.get()
         if not credentials or credentials.invalid:
@@ -221,11 +229,11 @@ class GtaskProvider:
                 user_agent='michel/0.0.1')
             flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args("")
             credentials = tools.run_flow(flow, storage, flags)
-            
+
         http = httplib2.Http()
         http = credentials.authorize(http)
         self._service = discovery.build(serviceName='tasks', version='v1', http=http, cache_discovery=False)
-        
+
         if self._list_name is None or self._list_name == "default":
             self._list_id = "@default"
         else:
