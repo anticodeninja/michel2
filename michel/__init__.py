@@ -5,6 +5,10 @@ michel-orgmode -- a script to push/pull an org-mode text file to/from a google
                   tasks list.
 """
 
+# This Source Code Form is subject to the terms of the
+# Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed
+# with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 import codecs
 import os.path
 import shutil

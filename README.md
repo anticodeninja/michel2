@@ -93,7 +93,7 @@ About
 Author/License
 --------------
 
-- License: Public Domain
+- License: MPL2
 - Original author: Christophe-Marie Duquesne ([blog post](http://blog.chmd.fr/releasing-michel-a-flat-text-file-to-google-tasks-uploader.html))
 - Author of org-mode version: Mark Edgington ([bitbucket site](https://bitbucket.org/edgimar/michel-orgmode))
 
