@@ -39,6 +39,7 @@ class PartTree:
     def __repr__(self):
         return str(self)
 
+
 class MergeEntry:
     def __init__(self, org, remote, base = None):
         self.org = org
@@ -50,6 +51,7 @@ class MergeEntry:
 
     def __repr__(self):
         return str(self)
+
 
 def _disassemble_tree(tree, disassemblies):
     def _disassemble(tree, parent, groups):
@@ -141,10 +143,10 @@ def _merge_repeated_tasks(mapped_tasks, tasks_org, tasks_remote, index_org, inde
                     break
 
                 if group_org_shed[goi] is None:
-                    while group_remote_shed[gri] is not None and gri < grs:
+                    while gri < grs and group_remote_shed[gri] is not None:
                         gri += 1
                 elif group_remote_shed[gri] is None:
-                    while group_org_shed[goi] is not None and goi < gos:
+                    while goi < gos and group_org_shed[goi] is not None:
                         goi += 1
 
                 goi += 1

@@ -19,7 +19,7 @@ import locale
 import michel as m
 import tests
 
-class TestMichel(unittest.TestCase):
+class MergeTests(unittest.TestCase):
 
     def __init__(self, *args, **kargs):
         super().__init__(*args, **kargs)
@@ -43,7 +43,8 @@ class TestMichel(unittest.TestCase):
         self.assertEqual(min(later, earlier, reference), earlier)
 
     def test_todo_only(self):
-        # Preparations
+
+        # Arrange
         org_tree = m.TasksTree.parse_text("""\
             * NotEntry
             * TODO TodoEntry
@@ -73,12 +74,12 @@ class TestMichel(unittest.TestCase):
             "NewTodoEntry", dict(todo=True),
         ])
 
-        # Actions
+        # Act
         m.treemerge(org_tree, remote_tree, None, tests.TestMergeConf([
             [None, "NewTodoEntry", None]
         ]))
 
-        # Verifications
+        # Assert
         result_text = textwrap.dedent("""\
             * NotEntry
             * DONE TodoEntry
@@ -104,7 +105,8 @@ class TestMichel(unittest.TestCase):
 
 
     def test_safemerge(self):
-        # Preparations
+
+        # Arrange
         org_tree = m.TasksTree.parse_text("""\
             * Headline A1
             * Headline A2
@@ -124,13 +126,13 @@ class TestMichel(unittest.TestCase):
             "Headline B2 modified", dict(notes=["New B2 body text."])
         ])
 
-        # Actions
+        # Act
         m.treemerge(org_tree, remote_tree, None, tests.TestMergeConf([
             [None, "Headline A1.1", None],
             ["Headline B2", "Headline B2 modified", "Headline B2 modified"],
         ]))
 
-        # Verifications
+        # Assert
         result_text = textwrap.dedent("""\
             * Headline A1
             ** Headline A1.1
@@ -146,7 +148,8 @@ class TestMichel(unittest.TestCase):
 
 
     def test_merge_sync_todo_only(self):
-        # Preparations
+
+        # Arrange
         org_tree = m.TasksTree.parse_text("""\
             * Headline A
             * Headline B
@@ -168,12 +171,12 @@ class TestMichel(unittest.TestCase):
             "Headline G", dict(todo=True),
         ])
 
-        # Actions
+        # Act
         m.treemerge(org_tree, remote_tree, None, tests.TestMergeConf([
             [None, "Headline G", None],
         ]))
 
-        # Verifications
+        # Assert
         result_text = textwrap.dedent("""\
             * Headline A
             * Headline B
@@ -192,7 +195,8 @@ class TestMichel(unittest.TestCase):
 
 
     def test_fast_merge(self):
-        # Preparations
+
+        # Arrange
         org_tree = m.TasksTree.parse_text("""\
             * Headline A
             * Headline B
@@ -222,7 +226,7 @@ class TestMichel(unittest.TestCase):
                                closed_time=self.now),
         ])
 
-        # Actions
+        # Act
         remote_sync_plan = m.treemerge(org_tree, remote_tree, None, tests.TestMergeConf([
             [None, "Headline G", None],
             [None, "Headline H", None],
@@ -230,7 +234,7 @@ class TestMichel(unittest.TestCase):
             ["Headline B3 original", "Headline B3", "Headline B3 original"],
         ]))
 
-        # Verifications
+        # Assert
         result_text = textwrap.dedent("""\
             * Headline A
             * Headline B
@@ -253,7 +257,7 @@ class TestMichel(unittest.TestCase):
             """.format(self.now.to_org_format()))
         self.assertEqual(str(org_tree), result_text)
 
-        
+
         self.assertEqual(len(remote_sync_plan), 7)
 
         # Headline B1
@@ -289,7 +293,8 @@ class TestMichel(unittest.TestCase):
 
 
     def test_sync_time(self):
-        # Preparations
+
+        # Arrange
         org_tree = m.TasksTree.parse_text("""\
             * TODO Headline A
             * TODO Headline B
@@ -310,10 +315,10 @@ class TestMichel(unittest.TestCase):
                                schedule_time=m.OrgDate(datetime.date(2015, 12, 9))),
         ])
 
-        # Actions
+        # Act
         m.treemerge(org_tree, remote_tree, None, tests.TestMergeConf())
 
-        # Verifications
+        # Assert
         result_text = textwrap.dedent("""\
             * TODO Headline A
               SCHEDULED: <2015-12-09 Wed>
@@ -326,7 +331,8 @@ class TestMichel(unittest.TestCase):
         self.assertEqual(str(org_tree), result_text)
 
     def test_3way_merge(self):
-        # Preparations
+
+        # Arrange
         base_tree = m.TasksTree.parse_text("""\
             * NotTodoTestTask
             * TitleMergeTest
@@ -369,14 +375,13 @@ class TestMichel(unittest.TestCase):
                                        schedule_time=m.OrgDate(datetime.date(2015, 12, 11)))
         ])
 
-        # Actions
+        # Act
         remote_sync_plan = m.treemerge(org_tree, remote_tree, base_tree, tests.TestMergeConf([
             ["TitleMergeTask2 org-edited", "TitleMergeTask2", None],
             ["TitleMergeTask3", "TitleMergeTask3 remote-edited", None],
         ]))
 
-
-        # Verifications
+        # Assert
         result_text = textwrap.dedent("""\
             * NotTodoTestTask
             * TitleMergeTest
@@ -393,7 +398,7 @@ class TestMichel(unittest.TestCase):
             """)
         self.assertEqual(str(org_tree), result_text)
 
-        
+
         self.assertEqual(len(remote_sync_plan), 2)
 
         # TitleMergeTask2 org-edited
@@ -408,61 +413,6 @@ class TestMichel(unittest.TestCase):
         self.assertEqual(assertObj['changes'], ['schedule_time'])
         self.assertEqual(assertObj['item'].schedule_time,
                          m.OrgDate(datetime.date(2015, 12, 10)))
-
-    def test_repeated_scheduled_task_merge(self):
-        # Preparations
-        base_tree = m.TasksTree.parse_text("""\
-            * TODO RepeatedTask
-              SCHEDULED: <2015-12-01 Wed>
-            * TODO RepeatedTask
-              SCHEDULED: <2015-12-03 Thu>
-            * TODO RepeatedTask
-              SCHEDULED: <2015-12-05 Sat>
-        """)
-
-        org_tree = m.TasksTree.parse_text("""\
-            * TODO RepeatedTask
-              SCHEDULED: <2015-12-01 Wed>
-            * TODO RepeatedTask
-              SCHEDULED: <2015-12-03 Thu>
-            * TODO RepeatedTask
-              SCHEDULED: <2015-12-05 Sat>
-        """)
-
-        remote_tree, indexes = tests.createTestTree([
-            "RepeatedTask", dict(todo=True,
-                                 schedule_time=m.OrgDate(datetime.date(2015, 12, 3))),
-            "RepeatedTask", dict(todo=True,
-                                 schedule_time=m.OrgDate(datetime.date(2015, 12, 6))),
-            "RepeatedTask", dict(todo=True,
-                                 schedule_time=m.OrgDate(datetime.date(2015, 12, 8))),
-            "RepeatedTask", dict(todo=True),
-        ])
-
-        # Actions
-        remote_sync_plan = m.treemerge(org_tree, remote_tree, base_tree, tests.TestMergeConf([
-            [None, "RepeatedTask", None]
-        ]))
-
-        # Verifications
-        result_text = textwrap.dedent("""\
-            * TODO RepeatedTask
-              SCHEDULED: <2015-12-01 Tue>
-            * TODO RepeatedTask
-              SCHEDULED: <2015-12-03 Thu>
-            * TODO RepeatedTask
-              SCHEDULED: <2015-12-06 Sun>
-            * TODO RepeatedTask
-              SCHEDULED: <2015-12-08 Tue>
-            * TODO RepeatedTask
-            """)
-        self.assertEqual(str(org_tree), result_text)
-
-        self.assertEqual(len(remote_sync_plan), 1)
-
-        # Remove RepeatedTask <2015-12-11 Fri>
-        assertObj = next(x for x in remote_sync_plan if x['item'] not in indexes)
-        self.assertEqual(assertObj['action'], 'append')
 
 
 if __name__ == '__main__':

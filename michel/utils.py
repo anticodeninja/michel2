@@ -20,11 +20,11 @@ _url_regex = re.compile("(\w+)://([\w/]+)(?:\?([\w=&]+))?")
 
 def parse_provider_url(url):
     matches = _url_regex.findall(url)
-    
+
     protocol = matches[0][0]
     path = matches[0][1].split("/")
     params = dict(x.split("=") for x in matches[0][2].split("&")) if len(matches[0][2]) > 0 else None
-    
+
     return protocol, path, params
 
 def get_provider(url):
@@ -61,7 +61,7 @@ def get_index(items, pred):
 def uprint(*objects, sep=' ', end='\n', file=sys.stdout):
     enc = file.encoding
     if enc == 'UTF-8':
-        print(*objects, sep=sep, end=end, file=file)
+        print(*objects, sep=sep, end=end, file=file, flush=True)
     else:
         f = lambda obj: str(obj).encode(enc, errors='backslashreplace').decode(enc)
-        print(*map(f, objects), sep=sep, end=end, file=file)
+        print(*map(f, objects), sep=sep, end=end, file=file, flush=True)

@@ -11,7 +11,7 @@ import sys
 if os.name == 'posix':
   UP_CURSOR_CODE = "\033[A"
   CLEAN_ROW_CODE = "\033[K"
-  
+
   def cleanLastRows(amount):
     print((UP_CURSOR_CODE + CLEAN_ROW_CODE) * amount + UP_CURSOR_CODE)
 
@@ -46,7 +46,7 @@ elif os.name == 'nt':
   def cleanLastRows(amount):
     csbi = CONSOLE_SCREEN_BUFFER_INFO()
     windll.kernel32.GetConsoleScreenBufferInfo(stdout_handle, ctypes.byref(csbi))
-    
+
     pos = wintypes._COORD(0, csbi.dwCursorPosition.Y-amount)
     written = wintypes.DWORD(0)
     windll.kernel32.FillConsoleOutputCharacterA(stdout_handle,
@@ -55,7 +55,7 @@ elif os.name == 'nt':
                                                 pos,
                                                 ctypes.byref(written))
     windll.kernel32.SetConsoleCursorPosition(stdout_handle, pos)
-    
+
 else:
   print("Sorry, your OS is not supported, please contact with a developer")
   sys.exit(2)

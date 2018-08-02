@@ -20,7 +20,7 @@ class InteractiveMergeConf:
     def __init__(self, adapter, only_todo = True):
         self.__adapter = adapter
         self.__only_todo = only_todo
-                
+
     def is_needed(self, task):
         if hasattr(self.__adapter, 'is_needed'):
             return self.__adapter.is_needed(self.__is_needed, task)
@@ -55,7 +55,7 @@ class InteractiveMergeConf:
         if hasattr(self.__adapter, 'merge_notes'):
             return self.__adapter.merge_notes(self.__merge_notes, mapping)
         return self.__merge_notes(mapping)
-    
+
 
     def __is_needed(self, task):
         if task.completed:
@@ -66,7 +66,7 @@ class InteractiveMergeConf:
 
         return True
 
-    def __select_org_task(self, unmapped_task, tasklist):        
+    def __select_org_task(self, unmapped_task, tasklist):
         uprint("\"{0}\" has not exact mapping in your local org-tree.".format(unmapped_task.title))
         uprint("Please manualy choose necessary item:")
         count = 2
@@ -76,23 +76,23 @@ class InteractiveMergeConf:
         items.sort(key=lambda v: v[2], reverse=True)
         items_count = len(items)
         items_count_for_showing = 10
-        
+
         while True:
             for i in range(min(items_count, items_count_for_showing)):
                 uprint("[{0}] {1}".format(i, items[i][1].title))
-                count += 1 
-                
+                count += 1
+
             if items_count > items_count_for_showing:
                 uprint("[m] ...")
                 count += 1
-            
+
             uprint("[n] -- create new")
             uprint("[d] -- discard new")
             count += 2
 
             result = input()
             count += 1
-            
+
             try:
                 if result == 'm':
                     items_count_for_showing = items_count
@@ -165,25 +165,25 @@ class InteractiveMergeConf:
             for i, v in enumerate(items):
                 uprint("[{0}] Use this block:".format(i))
                 count += 1
-                
+
                 for line in v:
                     uprint(line)
                     count += 1
-                    
+
                 uprint("-------------------------------------")
                 count += 1
-        
+
             uprint("[e] Edit in external editor")
             count += 1
-            
+
             result = input()
             count += 1
-            
+
             try:
                 if result == 'e':
                     result = None
                     break
-                
+
                 result = int(result)
                 if result >= 0 and result <= i:
                     result = items[result]
@@ -206,24 +206,24 @@ class InteractiveMergeConf:
                     for line in item:
                         temp_file.write(line)
                         temp_file.write('\n')
-                    
+
             subprocess.call('vim -n {0}'.format(temp_name), shell=True)
-            
+
             with codecs.open(temp_name, "r", encoding="utf-8") as temp_file:
                 result = [x.strip() for x in temp_file.readlines()]
-            
+
         except Exception as e:
             uprint(e)
-            
+
         os.close(temp_fid)
         os.remove(temp_name)
-        return result                
+        return result
 
     def __select_from(self, message, items):
         for l in message:
             uprint(l)
         count = len(message)
-        
+
         while True:
             for i, v in enumerate(items):
                 uprint("[{0}] {1}".format(i, v))
@@ -231,7 +231,7 @@ class InteractiveMergeConf:
 
             result = input()
             count += 1
-            
+
             try:
                 result = int(result)
                 if result >= 0 and result <= i:

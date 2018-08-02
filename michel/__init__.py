@@ -91,11 +91,11 @@ def repair_todolist(org_path):
     org_path = os.path.abspath(os.path.expanduser(org_path))
     if not os.path.exists(org_path):
         raise Exception("The org-file you want to synchronize does not exist.")
-    
+
     file_dir = os.path.dirname(org_path)
     file_fullname = os.path.basename(org_path)
     file_name, file_ext = os.path.splitext(file_fullname)
-    
+
     conflicts = [x for x in os.listdir(file_dir)
                  if x.startswith(file_name) and x.endswith(file_ext) and x != file_fullname]
 

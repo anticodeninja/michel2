@@ -20,8 +20,7 @@ import michel as m
 from michel.utils import *
 from tests import getLocaleAlias
 
-class TestMichel(unittest.TestCase):
-                         
+class GlobalizationTests(unittest.TestCase):
 
     def test_format_emacs_dates(self):
         test_locale = getLocaleAlias('ru')
@@ -49,7 +48,7 @@ class TestMichel(unittest.TestCase):
         """
         Test ability to print unicode text
         """
-        
+
         tasks_tree = m.TasksTree(None)
         task = tasks_tree.add_subtask('السلام عليكم')
         task.notes = ['viele Grüße']
@@ -61,7 +60,7 @@ class TestMichel(unittest.TestCase):
             self.fail("TasksTree._print() raised UnicodeDecodeError")
         test_stdout.close()
 
-        
+
     def test_unicode_dump_to_file(self):
         """
         Test ability to pull unicode text into orgfile
@@ -73,16 +72,16 @@ class TestMichel(unittest.TestCase):
 
         with tempfile.NamedTemporaryFile() as temp_file:
             temp_file_name = temp_file.name
-            
+
         try:
             tasks_tree.write_file(temp_file_name)
         except UnicodeDecodeError:
             self.fail("TasksTree.write_to_orgfile() raised UnicodeDecodeError")
 
-        
+
     def test_parse_scheduled_and_closed_time(self):
         m.OrgDate.default_locale = getLocaleAlias('us')
-        
+
         org_text = textwrap.dedent("""\
             * Headline 1
               Normal notes
@@ -96,7 +95,7 @@ class TestMichel(unittest.TestCase):
               CLOSED: [2015-12-10 Thu 03:25] SCHEDULED: <2015-12-09 Wed 03:00>
             """)
         tasktree = m.TasksTree.parse_text(org_text)
-        
+
         self.assertEqual(tasktree[0].closed_time, None)
         self.assertEqual(tasktree[0].schedule_time, None)
 
@@ -121,7 +120,7 @@ class TestMichel(unittest.TestCase):
         self.assertEqual(tasktree[4].schedule_time,
                          m.OrgDate(datetime.date(2015, 12, 9),
                                    datetime.time(3, 0)))
-                         
+
         self.assertEqual(str(tasktree), org_text)
 
 
