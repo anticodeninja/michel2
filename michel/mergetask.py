@@ -129,6 +129,7 @@ def _merge_repeated_tasks(mapped_tasks, tasks_org, tasks_remote, index_org, inde
     # Map tasks which have schedule_time
     gos = len(group_org_shed)
     grs = len(group_remote_shed)
+
     while True:
         goi, gri = 0, 0
         max_delta = sys.maxsize
@@ -165,11 +166,13 @@ def _merge_repeated_tasks(mapped_tasks, tasks_org, tasks_remote, index_org, inde
 
             if abs_delta == max_delta:
                 merge_list.append((goi, gri))
-
-            if delta > 0:
+                goi += 1
                 gri += 1
             else:
-                goi += 1
+                if delta > 0:
+                    gri += 1
+                else:
+                    goi += 1
 
         if len(merge_list) == 0:
             break

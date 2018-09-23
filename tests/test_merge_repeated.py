@@ -196,6 +196,47 @@ class MergeRepeatedTests(unittest.TestCase):
         assertObj = next(x for x in remote_sync_plan if x['item'] not in indexes)
         self.assertEqual(assertObj['action'], 'append')
 
+    def test_repeated_scheduled_one_day_issue(self):
+
+        # Arrange
+        base_tree = m.TasksTree.parse_text("""\
+            * TODO RepeatedTask
+              SCHEDULED: <2018-09-17 Mon>
+            * TODO RepeatedTask
+              SCHEDULED: <2018-10-08 Mon>
+        """)
+
+        org_tree = m.TasksTree.parse_text("""\
+            * TODO RepeatedTask
+              SCHEDULED: <2018-10-08 Mon>
+            * TODO RepeatedTask
+              SCHEDULED: <2018-10-08 Mon>
+        """)
+
+        remote_tree, indexes = tests.createTestTree([
+            "RepeatedTask",
+            dict(todo=True, schedule_time=m.OrgDate(datetime.date(2018, 9, 17))),
+            "RepeatedTask",
+            dict(todo=True, schedule_time=m.OrgDate(datetime.date(2018, 10, 8))),
+        ])
+
+        # Act
+        remote_sync_plan = m.treemerge(org_tree, remote_tree, base_tree, tests.TestMergeConf())
+
+        # Assert
+        result_text = textwrap.dedent("""\
+            * TODO RepeatedTask
+              SCHEDULED: <2018-10-08 Mon>
+            * TODO RepeatedTask
+              SCHEDULED: <2018-10-08 Mon>
+            """)
+        self.assertEqual(str(org_tree), result_text)
+        self.assertEqual(len(remote_sync_plan), 1)
+
+        assertObj = next(x for x in remote_sync_plan if x['item'] == indexes[0])
+        self.assertEqual(assertObj['action'], 'update')
+
+
 
 if __name__ == '__main__':
     unittest.main()
