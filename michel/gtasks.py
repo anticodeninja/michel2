@@ -12,6 +12,7 @@ import re
 
 from apiclient import discovery
 import oauth2client
+import oauth2client.file
 from oauth2client import client
 from oauth2client import tools
 
