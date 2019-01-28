@@ -68,7 +68,8 @@ def _disassemble_tree(tree, disassemblies):
         for i in range(len(tree)):
             _disassemble(tree[i], current, groups)
 
-    _disassemble(tree, None, {})
+    for i in range(len(tree)):
+        _disassemble(tree[i], None, {})
     disassemblies.sort(key=lambda node: node.hash_sum)
 
 def __extract_from_base(mapping, name):

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
 """
 michel-orgmode -- a script to push/pull an org-mode text file to/from a google
                   tasks list.
@@ -50,7 +51,7 @@ def write_todolist(path, url):
     provider.pull()
     provider.get_tasks().write_file(path)
 
-def push_todolist(org_path, profile, list_name, only_todo):
+def push_todolist(org_path, url, only_todo):
     """Pushes the specified file to the specified todolist"""
 
     org_path = os.path.expanduser(org_path)

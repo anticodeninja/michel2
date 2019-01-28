@@ -38,21 +38,21 @@ class ParserTests(unittest.TestCase):
 
     def test_initial_non_headline_text(self):
         """
-        Test the case where the first lines of an org-mode file are not
-        org-mode headlines.
+        Test the case with org-mode properties
         """
 
         org_text = textwrap.dedent("""\
             Some non-headline text...
             Another line of it.
             * Headline 1
-            Body 1a
-                Body 1b
-            * DONE    Headline 2
+              Body 1a
+              Body 1b
+            * DONE Headline 2
             ** Headline 2.1
             """)
 
-        self.assertRaises(ValueError, m.TasksTree.parse_text, org_text)
+        tasktree = m.TasksTree.parse_text(org_text)
+        self.assertEqual(str(tasktree), org_text)
 
 
     def test_no_headlines(self):
@@ -66,7 +66,8 @@ class ParserTests(unittest.TestCase):
             Another line of it.
             """)
 
-        self.assertRaises(ValueError, m.TasksTree.parse_text, org_text)
+        tasktree = m.TasksTree.parse_text(org_text)
+        self.assertEqual(str(tasktree), org_text)
 
 
     def test_empty_file(self):

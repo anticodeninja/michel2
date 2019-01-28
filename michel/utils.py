@@ -9,21 +9,21 @@ import datetime
 import time
 import os
 import locale
-import re
 import sys
 
 from importlib.machinery import SourceFileLoader
 
 import michel as m
 
-_url_regex = re.compile("(\w+)://([\w/]+)(?:\?([\w=&]+))?")
 
 def parse_provider_url(url):
-    matches = _url_regex.findall(url)
+    protocol, extra = url.split('://')
+    extra = extra.split('?')
 
-    protocol = matches[0][0]
-    path = matches[0][1].split("/")
-    params = dict(x.split("=") for x in matches[0][2].split("&")) if len(matches[0][2]) > 0 else None
+    path = extra[0]
+    path = path.split("/")
+
+    params = dict(x.split("=") for x in extra[1].split("&")) if len(extra) > 1 else {}
 
     return protocol, path, params
 

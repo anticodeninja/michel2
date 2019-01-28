@@ -20,6 +20,14 @@ class TestMichel(unittest.TestCase):
         self.assertEqual(path, ["node1", "node2"])
         self.assertEqual(params, {"param1": "2", "param2": "1"})
 
+
+    def test_parse_provider_url_wo_params(self):
+        protocol, path, params = m.parse_provider_url("test://node1/à faire")
+        self.assertEqual(protocol, "test")
+        self.assertEqual(path, ["node1", "à faire"])
+        self.assertEqual(params, {})
+
+
     def test_get_provider(self):
         provider = m.get_provider("gtask://__default/default")
         self.assertIsNotNone(provider)

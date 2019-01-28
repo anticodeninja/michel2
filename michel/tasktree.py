@@ -237,10 +237,9 @@ class TasksTree(object):
 
         self.notes = real_notes
 
-    def _lines(self, level):
+    def _append_tree(self, res, level):
         """Returns the sequence of lines of the string representation"""
-        res = []
-        
+
         for subtask in self.subtasks:
             task_line = ['*' * (level + 1)]
             if subtask.completed:
@@ -257,29 +256,31 @@ class TasksTree(object):
                 time_line.append("SCHEDULED: <{0}>".format(subtask.schedule_time.to_org_format()))
             if len(time_line) > 1:
                 res.append(' '.join(time_line))
+            subtask._append_notes(res, level + 2)
+            subtask._append_tree(res, level + 1)
 
-            for note_line in subtask.notes:
-                # add initial space to lines starting w/'*', so that it isn't treated as a task
-                if note_line.startswith("*"):
-                    note_line = " " + note_line
-                note_line = ' ' * (level + 2) + note_line
-                res.append(note_line)
-                
-            res += subtask._lines(level + 1)
-            
-        return res
 
+    def _append_notes(self, res, padding):
+        for note_line in self.notes:
+            # add initial space to lines starting w/'*', so that it isn't treated as a task
+            if note_line.startswith("*"):
+                note_line = " " + note_line
+            note_line = ' ' * padding + note_line
+            res.append(note_line)
 
     def __str__(self):
         """string representation of the tree.
-        
+
         Only the root-node's children (and their descendents...) are printed,
         not the root-node itself.
-        
+
         """
         # always add a trailing "\n" because text-files normally include a "\n"
         # at the end of the last line of the file.
-        return '\n'.join(self._lines(0)) + "\n"
+        res = []
+        self._append_notes(res, 0)
+        self._append_tree(res, 0)
+        return '\n'.join(res) + "\n"
 
     def write_file(self, fname):
         f = codecs.open(fname, "w", "utf-8")
@@ -296,10 +297,9 @@ class TasksTree(object):
         """Parses an org-mode formatted block of text and returns a tree"""
         # create a (read-only) file object containing *text*
         f = io.StringIO(text)
-    
+
         tasks_tree = TasksTree(None)
-    
-        last_task = None
+        last_task = tasks_tree
         task_stack = [tasks_tree]
 
         for line in f:
@@ -316,18 +316,14 @@ class TasksTree(object):
                 if (indent_level + 1) > len(task_stack):
                     task_stack = [task_stack[x] if x < len(task_stack) else None
                                   for x in range(indent_level + 1)]
-                
+
                 task_stack[indent_level] = last_task
-            
+
                 last_task.todo = matches[0][1] == 'DONE' or matches[0][1] == 'TODO'
                 last_task.completed = matches[0][1] == 'DONE'
 
             except IndexError:
                 # this is not a task, but a task-notes line
-            
-                if last_task is None:
-                    raise ValueError("Text without task is not permitted")
-
                 last_task.notes.append(line)
 
         f.close()
