@@ -218,7 +218,7 @@ class GtaskProvider:
 
     def _init_service(self):
         """
-        Handle oauth's shit (copy-pasta from
+        Handle oauth's shit (copy-paste from
         http://code.google.com/apis/tasks/v1/using.html)
         Yes I do publish a secret key here, apparently it is normal
         http://stackoverflow.com/questions/7274554/why-google-native-oauth2-flow-require-client-secret

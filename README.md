@@ -10,34 +10,38 @@ org-mode text file and a google tasks list.
 Usage
 =====
 
+Your Google task list will be represented as a particular URL that follows
+the format:
+
+    gtask://<profile>/<list name>
+
+If you have lists that contain spaces or special characters, just add single
+quotes around  the URL to avoid having the command line interpret any of these.
+
 Examples
 --------
 
 - Pull your default task-list to an org-mode file:
 
-            michel --pull --orgfile myfile.org
-
-- Pull the default task-list from a different google account to an org-mode file:
-
-            michel --pull --orgfile myfile_other.org --profile other_acct
+            michel pull myfile.org gtask://profile/default
 
 - Push an org-mode file to your default task-list:
 
-            michel --push --orgfile myfile.org
+            michel push myfile.org gtask://profile/default
 
 - Synchronize an org-mode file with your default task-list:
 
-            michel --sync --orgfile myfile.org
+            michel sync myfile.org gtask://profile/default
 
 - Synchronize an org-mode file with your task-list named "Shopping":
 
-            michel --sync --orgfile shopping.org --listname Shopping
+            michel sync shopping.org gtask://profile/Shopping
 
 Configuration
 -------------
 
-The first time michel is run under a particular profile, you will be shown a
-URL.  Click it, and authorize michel to access google-tasks data for whichever
+The first time =michel2= is run under a particular profile, you will be shown a
+URL.  Click it, and authorize =michel2= to access google-tasks data for whichever
 google-account you want to associate with the profile.  You're done!  If no
 profile is specified when running michel, a default profile will be used.
 
@@ -50,19 +54,18 @@ to authenticate with google and access your tasks data.
 Command line options
 --------------------
 
-    usage: michel [-h] (--push | --pull | --sync) [--orgfile FILE]
-                  [--profile PROFILE] [--listname LISTNAME]
+    usage: michel [-h] (push|pull|sync|print|repair|run) ...
 
     optional arguments:
       -h, --help           show this help message and exit
-      --push               replace LISTNAME with the contents of FILE.
-      --pull               replace FILE with the contents of LISTNAME.
-      --sync               synchronize changes between FILE and LISTNAME.
-      --orgfile FILE       An org-mode file to push from / pull to
-      --profile PROFILE    A user-defined profile name to distinguish between
-                           different google accounts
-      --listname LISTNAME  A GTasks list to pull from / push to (default list if
-                           empty)
+
+    Commands:
+      push FILE URL   replace task list in URL with the contents of FILE.
+      pull FILE URL   replace FILE with the contents of tasks at URL.
+      sync FILE URL   synchronize changes between FILE and tasks at URL.
+      print URL       displays the tasks in URL as org format to the console.
+      repair FILE     combines the FILE with conficted copies.
+      run SCRIPTFILE  runs the commands stored in FILE as JSON.
 
 Org-mode Syntax
 ---------------
