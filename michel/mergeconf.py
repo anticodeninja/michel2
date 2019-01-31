@@ -67,8 +67,8 @@ class InteractiveMergeConf:
         return True
 
     def __select_org_task(self, unmapped_task, tasklist):
-        uprint("\"{0}\" has not exact mapping in your local org-tree.".format(unmapped_task.title))
-        uprint("Please manualy choose necessary item:")
+        uprint("\"{0}\" has no exact mapping in your local org-tree.".format(unmapped_task.title))
+        uprint("Please manually choose the wanted item:")
         count = 2
 
         items = [[i, v, difflib.SequenceMatcher(a=unmapped_task.title, b=v.title).ratio()]
