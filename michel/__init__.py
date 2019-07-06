@@ -43,10 +43,6 @@ def write_todolist(path, url):
 
     """
 
-    path = os.path.expanduser(path)
-    if not os.path.exists(path):
-        raise Exception("The org-file you want to synchronize does not exist.")
-
     provider = get_provider(url)
     provider.pull()
     provider.get_tasks().write_file(path)
