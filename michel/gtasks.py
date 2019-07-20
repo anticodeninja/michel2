@@ -67,15 +67,6 @@ class GtaskProvider:
     def get_tasks(self):
         return self._tasks_tree
 
-    def erase(self):
-        """Erases the todo list of given id"""
-
-        tasks = self._service.tasks().list(tasklist=self._list_id).execute()
-        for task in tasks.get('items', []):
-            self._service.tasks().delete(tasklist=self._list_id, task=task['id']).execute()
-
-        self.pull()
-
 
     def sync(self, sync_plan):
         for item in sync_plan:

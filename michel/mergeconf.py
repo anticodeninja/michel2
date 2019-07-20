@@ -17,62 +17,106 @@ import difflib
 from michel.utils import *
 import michel.console as console
 
-class InteractiveMergeConf:
+class BaseMergeConf:
+
     def __init__(self, adapter, only_todo = True):
-        self.__adapter = adapter
-        self.__only_todo = only_todo
+        self._adapter = adapter
+        self._only_todo = only_todo
+
 
     def is_needed(self, task):
-        if hasattr(self.__adapter, 'is_needed'):
-            return self.__adapter.is_needed(self.__is_needed, task)
-        return self.__is_needed(task)
+        if hasattr(self._adapter, 'is_needed'):
+            return self._adapter.is_needed(self._is_needed, task)
+        return self._is_needed(task)
+
 
     def select_org_task(self, unmapped_task, tasklist):
-        if hasattr(self.__adapter, 'select_org_task'):
-            return self.__adapter.select_org_task(self.__select_org_task, unmapped_task, tasklist)
-        return self.__select_org_task(unmapped_task, tasklist)
+        if hasattr(self._adapter, 'select_org_task'):
+            return self._adapter.select_org_task(self._select_org_task, unmapped_task, tasklist)
+        return self._select_org_task(unmapped_task, tasklist)
+
 
     def merge_title(self, mapping):
-        if hasattr(self.__adapter, 'merge_title'):
-            return self.__adapter.merge_title(self.__merge_title, mapping)
-        return self.__merge_title(mapping)
+        if hasattr(self._adapter, 'merge_title'):
+            return self._adapter.merge_title(self._merge_title, mapping)
+        return self._merge_title(mapping)
+
 
     def merge_completed(self, mapping):
-        if hasattr(self.__adapter, 'merge_completed'):
-            return self.__adapter.merge_completed(self.__merge_completed, mapping)
-        return self.__merge_completed(mapping)
+        if hasattr(self._adapter, 'merge_completed'):
+            return self._adapter.merge_completed(self._merge_completed, mapping)
+        return self._merge_completed(mapping)
+
 
     def merge_closed_time(self, mapping):
-        if hasattr(self.__adapter, 'merge_closed_time'):
-            return self.__adapter.merge_closed_time(self.__merge_closed_time, mapping)
-        return self.__merge_closed_time(mapping)
+        if hasattr(self._adapter, 'merge_closed_time'):
+            return self._adapter.merge_closed_time(self._merge_closed_time, mapping)
+        return self._merge_closed_time(mapping)
+
 
     def merge_schedule_time(self, mapping):
-        if hasattr(self.__adapter, 'merge_schedule_time'):
-            return self.__adapter.merge_schedule_time(self.__merge_schedule_time, mapping)
-        return self.__merge_schedule_time(mapping)
+        if hasattr(self._adapter, 'merge_schedule_time'):
+            return self._adapter.merge_schedule_time(self._merge_schedule_time, mapping)
+        return self._merge_schedule_time(mapping)
+
 
     def merge_notes(self, mapping):
-        if hasattr(self.__adapter, 'merge_notes'):
-            return self.__adapter.merge_notes(self.__merge_notes, mapping)
-        return self.__merge_notes(mapping)
+        if hasattr(self._adapter, 'merge_notes'):
+            return self._adapter.merge_notes(self._merge_notes, mapping)
+        return self._merge_notes(mapping)
+
 
     def merge_links(self, mapping):
-        if hasattr(self.__adapter, 'merge_links'):
-            return self.__adapter.merge_links(self.__merge_notes, mapping)
-        return InteractiveMergeConf.merge_links(mapping)
+        if hasattr(self._adapter, 'merge_links'):
+            return self._adapter.merge_links(self._merge_notes, mapping)
+        return self._merge_links(mapping)
 
 
-    def __is_needed(self, task):
+    def _is_needed(self, task):
         if task.completed:
             return False
 
-        if self.__only_todo:
+        if self._only_todo:
             return task.todo
 
         return True
 
-    def __select_org_task(self, unmapped_task, tasklist):
+
+    def _merge_closed_time(self, mapping):
+        if mapping.org.completed:
+            if mapping.remote.closed_time and mapping.org.closed_time:
+                return min(mapping.org.closed_time, mapping.remote.closed_time)
+            elif mapping.org.closed_time or mapping.remote.closed_time:
+                return mapping.org.closed_time or mapping.remote.closed_time
+            else:
+                return m.OrgDate.now()
+        else:
+            return None
+
+
+    @classmethod
+    def merge_links(cls, mapping):
+        # TODO Make it interactive
+        total = collections.OrderedDict()
+
+        def update(links):
+            for link in links:
+                temp = total.setdefault(link.link, m.TaskLink(link.link))
+                if link.title:
+                    temp.title = link.title
+                if len(link.tags) > 0:
+                    temp.tags = link.tags
+
+        update(mapping.org.links)
+        update(mapping.remote.links)
+
+        return [x for x in total.values()]
+
+
+
+class InteractiveMergeConf(BaseMergeConf):
+
+    def _select_org_task(self, unmapped_task, tasklist):
         uprint("\"{0}\" has no exact mapping in your local org-tree.".format(unmapped_task.title))
         uprint("Please manually choose the wanted item:")
         count = 2
@@ -123,7 +167,8 @@ class InteractiveMergeConf:
         console.cleanLastRows(count)
         return result
 
-    def __merge_title(self, mapping):
+
+    def _merge_title(self, mapping):
         return self.__select_from([
             "Tasks has different titles",
             "Please manualy choose necessary value:"
@@ -132,7 +177,8 @@ class InteractiveMergeConf:
             mapping.remote.title
         ])
 
-    def __merge_completed(self, mapping):
+
+    def _merge_completed(self, mapping):
         return self.__select_from([
             "Task \"{0}\" has different values for attribute \"completed\"".format(mapping.org.title),
             "Please manualy choose necessary value:"
@@ -141,18 +187,8 @@ class InteractiveMergeConf:
             mapping.remote.completed
         ])
 
-    def __merge_closed_time(self, mapping):
-        if mapping.org.completed:
-            if mapping.remote.closed_time and mapping.org.closed_time:
-                return min(mapping.org.closed_time,  mapping.remote.closed_time)
-            elif mapping.org.closed_time or mapping.remote.closed_time:
-                return mapping.org.closed_time or mapping.remote.closed_time
-            else:
-                return m.OrgDate.now()
-        else:
-            return None
 
-    def __merge_schedule_time(self, mapping):
+    def _merge_schedule_time(self, mapping):
         return self.__select_from([
             "Task \"{0}\" has different values for attribute \"schedule_time\"".format(mapping.org.title),
             "Please manualy choose necessary value:"
@@ -161,7 +197,8 @@ class InteractiveMergeConf:
             mapping.remote.schedule_time
         ])
 
-    def __merge_notes(self, mapping):
+
+    def _merge_notes(self, mapping):
         uprint("Task \"{0}\" has different values for attribute \"notes\"".format(mapping.org.title))
         uprint("Please manualy choose necessary:")
         count = 2
@@ -225,23 +262,9 @@ class InteractiveMergeConf:
         os.remove(temp_name)
         return result
 
-    @classmethod
-    def merge_links(self, mapping):
-        # TODO Make it interactive
-        total = collections.OrderedDict()
 
-        def update(links):
-            for link in links:
-                temp = total.setdefault(link.link, m.TaskLink(link.link))
-                if link.title:
-                    temp.title = link.title
-                if len(link.tags) > 0:
-                    temp.tags = link.tags
-
-        update(mapping.org.links)
-        update(mapping.remote.links)
-
-        return [x for x in total.values()]
+    def _merge_links(self, mapping):
+        return BaseMergeConf.merge_links(mapping)
 
 
     def __select_from(self, message, items):
@@ -270,3 +293,33 @@ class InteractiveMergeConf:
 
         console.cleanLastRows(count)
         return result
+
+
+
+class PushMergeConf(BaseMergeConf):
+
+    def _select_org_task(self, unmapped_task, tasklist):
+        items = [[i, v, difflib.SequenceMatcher(a=unmapped_task.title, b=v.title).ratio()]
+                 for i, v in enumerate(tasklist)]
+        items.sort(key=lambda v: v[2], reverse=True)
+        return items[0][0]
+
+
+    def _merge_title(self, mapping):
+        return mapping.org.title
+
+
+    def _merge_completed(self, mapping):
+        return mapping.org.completed
+
+
+    def _merge_schedule_time(self, mapping):
+        return mapping.org.schedule_time
+
+
+    def _merge_notes(self, mapping):
+        return mapping.org.notes
+
+
+    def _merge_links(self, mapping):
+        return mapping.org.links

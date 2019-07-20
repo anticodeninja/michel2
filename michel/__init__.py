@@ -56,10 +56,10 @@ def push_todolist(org_path, url, only_todo):
     org_tree = TasksTree.parse_file(org_path)
 
     provider = get_provider(url)
-    provider.erase()
+    provider.pull()
     remote_tree = provider.get_tasks()
 
-    sync_plan = treemerge(org_tree, remote_tree, None, InteractiveMergeConf(provider, only_todo))
+    sync_plan = treemerge(org_tree, remote_tree, None, PushMergeConf(provider, only_todo))
     provider.sync(sync_plan)
 
 def sync_todolist(org_path, url, only_todo):
