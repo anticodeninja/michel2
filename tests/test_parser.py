@@ -79,20 +79,40 @@ class ParserTests(unittest.TestCase):
         m.default_locale = locale.locale_alias['ru']
 
         org_text = textwrap.dedent("""\
+            * TODO Headline A
+              CLOSED: [2015-12-09 Wed 12:34] SCHEDULED: <2015-12-09 Wed>
             * TODO Headline B
               SCHEDULED: <2015-12-09 Wed 20:00-21:00>
+              https://anticode.ninja
+              [[https://anticode.ninja][#anticode.ninja# blog]]
+              [[https://github.com/anticodeninja/michel2][michel2 #repo #github]]
               Normal note
             """)
 
         org_tree = m.TasksTree.parse_text(org_text)
 
-        self.assertEqual(len(org_tree), 1)
-        self.assertEqual(org_tree[0].title, "Headline B")
+        self.assertEqual(len(org_tree), 2)
+
+        self.assertEqual(org_tree[0].title, "Headline A")
+        self.assertEqual(len(org_tree[0].links), 0)
         self.assertEqual(org_tree[0].schedule_time,
+                         m.OrgDate(datetime.date(2015, 12, 9)))
+        self.assertEqual(org_tree[0].closed_time,
+                         m.OrgDate(datetime.date(2015, 12, 9),
+                                   datetime.time(12, 34)))
+        self.assertEqual(org_tree[0].notes, [])
+
+        self.assertEqual(org_tree[1].title, "Headline B")
+        self.assertEqual(len(org_tree[1].links), 3)
+        self.assertEqual(org_tree[1].links[0], m.TaskLink('https://anticode.ninja'))
+        self.assertEqual(org_tree[1].links[1], m.TaskLink('https://anticode.ninja', '#anticode.ninja# blog'))
+        self.assertEqual(org_tree[1].links[2], m.TaskLink('https://github.com/anticodeninja/michel2', 'michel2', ['repo', 'github']))
+        self.assertEqual(org_tree[1].schedule_time,
                          m.OrgDate(datetime.date(2015, 12, 9),
                                    datetime.time(20, 0),
                                    datetime.timedelta(hours=1)))
-        self.assertEqual(org_tree[0].notes, ["Normal note"])
+        self.assertEqual(org_tree[1].notes, ["Normal note"])
+
         self.assertEqual(str(org_tree), org_text)
 
 

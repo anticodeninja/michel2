@@ -415,5 +415,51 @@ class MergeTests(unittest.TestCase):
                          m.OrgDate(datetime.date(2015, 12, 10)))
 
 
+    def test_links_merge(self):
+
+        # Arrange
+        org_tree = m.TasksTree.parse_text("""\
+            * TODO Headline A
+            https://anticode.ninja
+            * TODO Headline B
+            [[https://anticode.ninja][#anticode.ninja# blog]]
+            [[https://github.com/anticodeninja/michel2][michel2 #repo #github]]
+        """.format(self.now.to_org_format()))
+
+        remote_tree, indexes = tests.createTestTree([
+            "Headline A", dict(todo=True, links=[
+                m.TaskLink("https://anticode.ninja"),
+                m.TaskLink('https://github.com/anticodeninja/michel2', 'michel2', ['repo', 'github'])
+            ]),
+            "Headline B", dict(todo=True, links=[
+                m.TaskLink('https://anticode.ninja', '#anticode.ninja# blog')
+            ])
+        ])
+
+        # Act
+        remote_sync_plan = m.treemerge(org_tree, remote_tree, None, tests.TestMergeConf())
+
+        # Assert
+        result_text = textwrap.dedent("""\
+            * TODO Headline A
+              https://anticode.ninja
+              [[https://github.com/anticodeninja/michel2][michel2 #repo #github]]
+            * TODO Headline B
+              [[https://anticode.ninja][#anticode.ninja# blog]]
+              [[https://github.com/anticodeninja/michel2][michel2 #repo #github]]
+            """.format(self.now.to_org_format()))
+        self.assertEqual(str(org_tree), result_text)
+
+        self.assertEqual(len(remote_sync_plan), 1)
+
+        # Headline A
+        assertObj = next(x for x in remote_sync_plan if x['item'] == indexes[1])
+        self.assertEqual(assertObj['action'], 'update')
+        self.assertEqual(assertObj['changes'], ['links'])
+        self.assertEqual(len(assertObj['item'].links), 2)
+        self.assertEqual(assertObj['item'].links[0], m.TaskLink('https://anticode.ninja', '#anticode.ninja# blog'))
+        self.assertEqual(assertObj['item'].links[1], m.TaskLink('https://github.com/anticodeninja/michel2', 'michel2', ['repo', 'github']))
+
+
 if __name__ == '__main__':
     unittest.main()

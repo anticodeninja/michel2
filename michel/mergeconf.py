@@ -6,6 +6,7 @@
 # with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import codecs
+import collections
 import re
 import io
 import datetime
@@ -55,6 +56,11 @@ class InteractiveMergeConf:
         if hasattr(self.__adapter, 'merge_notes'):
             return self.__adapter.merge_notes(self.__merge_notes, mapping)
         return self.__merge_notes(mapping)
+
+    def merge_links(self, mapping):
+        if hasattr(self.__adapter, 'merge_links'):
+            return self.__adapter.merge_links(self.__merge_notes, mapping)
+        return InteractiveMergeConf.merge_links(mapping)
 
 
     def __is_needed(self, task):
@@ -218,6 +224,25 @@ class InteractiveMergeConf:
         os.close(temp_fid)
         os.remove(temp_name)
         return result
+
+    @classmethod
+    def merge_links(self, mapping):
+        # TODO Make it interactive
+        total = collections.OrderedDict()
+
+        def update(links):
+            for link in links:
+                temp = total.setdefault(link.link, m.TaskLink(link.link))
+                if link.title:
+                    temp.title = link.title
+                if len(link.tags) > 0:
+                    temp.tags = link.tags
+
+        update(mapping.org.links)
+        update(mapping.remote.links)
+
+        return [x for x in total.values()]
+
 
     def __select_from(self, message, items):
         for l in message:

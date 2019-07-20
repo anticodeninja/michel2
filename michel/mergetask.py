@@ -89,7 +89,7 @@ def __extract_from_base(mapping, name):
 def merge_attr(mapping, attr_name, merge_func, changes_list):
     if getattr(mapping.org, attr_name) != getattr(mapping.remote, attr_name):
         new_value = None
-        if attr_name in ['title', 'completed', 'schedule_time', 'notes']:
+        if attr_name in ['title', 'completed', 'schedule_time', 'notes', 'links']:
             new_value = __extract_from_base(mapping, attr_name)
         if new_value is None:
             new_value = merge_func(mapping)
@@ -100,7 +100,7 @@ def merge_attr(mapping, attr_name, merge_func, changes_list):
         changes_list.append(attr_name)
 
 def copy_attr(task_dst, task_src):
-    for attr_name in ["notes", "todo", "completed", "closed_time", "schedule_time"]:
+    for attr_name in ['todo', 'completed', 'closed_time', 'schedule_time', 'notes', 'links']:
         setattr(task_dst, attr_name, getattr(task_src, attr_name))
 
 def _merge_repeated_tasks(mapped_tasks, tasks_org, tasks_remote, index_org, index_remote):
@@ -279,6 +279,7 @@ def treemerge(tree_org, tree_remote, tree_base, conf):
         merge_attr(merge_entry, "closed_time", lambda a: conf.merge_closed_time(a), changes_list)
         merge_attr(merge_entry, "schedule_time", lambda a: conf.merge_schedule_time(a), changes_list)
         merge_attr(merge_entry, "notes", lambda a: conf.merge_notes(a), changes_list)
+        merge_attr(merge_entry, "links", lambda a: conf.merge_links(a), changes_list)
 
         if conf.is_needed(map_entry.remote.task):
             if len(changes_list) > 0:

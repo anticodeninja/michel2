@@ -16,7 +16,7 @@ import oauth2client.file
 from oauth2client import client
 from oauth2client import tools
 
-from michel.tasktree import TasksTree, OrgDate
+from michel.tasktree import TaskLink, TasksTree, OrgDate
 from michel import utils
 
 if 'HTTP_PROXY' in os.environ:
@@ -106,6 +106,9 @@ class GtaskProvider:
                 if task.schedule_time is not None:
                     gtask['due'] = self._to_google_date_format(task.schedule_time)
 
+                if len(task.links) > 0:
+                    gtask['links'] = GtaskProvider.convert_links(task.links)
+
                 res = self._service.tasks().insert(
                     tasklist=self._list_id,
                     parent=gparent,
@@ -132,6 +135,8 @@ class GtaskProvider:
                         gtask['due'] = self._to_google_date_format(task.schedule_time)
                     else:
                         gtask['due'] = None
+                if 'links' in item['changes'] > 0:
+                    gtask['links'] = GtaskProvider.convert_links(task.links)
 
                 if len(gtask) == 0:
                     continue
@@ -203,7 +208,6 @@ class GtaskProvider:
                 task.schedule_time = self._from_google_date_format(gtask['due']) if 'due' in gtask else None
                 task.closed_time = self._from_google_date_format(gtask['completed']) if 'completed' in gtask else None
 
-                task.notes = []
                 if 'notes' in gtask:
                     for note_line in gtask['notes'].split('\n'):
                         note_line = note_line.strip()
@@ -212,6 +216,13 @@ class GtaskProvider:
 
                         if len(note_line) > 0:
                             task.notes.append(note_line)
+
+                if 'links' in gtask:
+                    for link in gtask['links']:
+                        task.links.append(TaskLink(
+                            link['link'],
+                            link['description'],
+                            [link['type']]))
 
             except ValueError:
                 fail_count += 1
@@ -259,3 +270,11 @@ class GtaskProvider:
     @classmethod
     def _to_google_date_format(self, value):
         return value.get_date().strftime("%Y-%m-%dT00:00:00Z")
+
+    @classmethod
+    def convert_links(self, links):
+        return [{
+            'link': x.link,
+            'description': x.title or x.link,
+            'type': x.tags[0] if len(x.tags) > 0 else 'url'
+        } for x in links]

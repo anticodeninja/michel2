@@ -65,6 +65,10 @@ class TestMergeConf:
 
         raise Exception("Undefined behavior")
 
+    def merge_links(self, mapping):
+        return michel.InteractiveMergeConf.merge_links(mapping)
+
+
 def createTestTree(nodes):
     result = michel.TasksTree(None)
 

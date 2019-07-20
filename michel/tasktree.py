@@ -14,6 +14,9 @@ from michel.utils import *
 
 headline_regex = re.compile("^(\*+) *(DONE|TODO)? *(.*)")
 timeline_regex = re.compile("(?:CLOSED: \[(.*)\]|(?:SCHEDULED: <(.*)>) *)+")
+shortlink_regex = re.compile("^([\w-]+:\/\/[^\s\]]*)$")
+fulllink_regex = re.compile("^\[\[([\w-]+:\/\/[^\s\]]*)\]\[([^\]]+)\]\]$")
+tags_regex = re.compile("\s+#(\S+)$")
 
 class OrgDate:
     default_locale = None
@@ -22,17 +25,17 @@ class OrgDate:
     def __init__(self, date, start_time = None, duration = None):
         if start_time is None and duration is not None:
             raise ValueError("duration cannot be defined without start_time")
-            
+
         self._date = date
         self._start_time = start_time
         self._duration = duration
-        
+
 
     @classmethod
     def parse_org_format(self, org_time = None):
         if org_time is None:
             return None
-        
+
         temp = [int(x) for x in self._regex.findall(org_time)[0] if len(x) > 0]
         if len(temp) < 3:
             return None
@@ -58,14 +61,14 @@ class OrgDate:
 
             if self._start_time:
                 res += self._start_time.strftime(" %H:%M")
-                
+
             if self._duration:
                 res += self._calc_end_time(self._start_time, self._duration).strftime("-%H:%M")
 
             if os.name == 'nt':
                 # It's hell...
                 res = res.encode('latin-1').decode(locale.getpreferredencoding())
-                                           
+
             return res
         finally:
             locale.setlocale(locale.LC_TIME, old_locale)
@@ -98,13 +101,16 @@ class OrgDate:
 
         if self._start_time is None or other._start_time is None:
             return False
-                
+
         if self._start_time < other._start_time:
             return True
         elif self._start_time > other._start_time:
             return False
 
         return False
+
+    def __repr__(self):
+        return self.to_org_format()
 
     def __str__(self):
         return self.to_org_format()
@@ -120,14 +126,63 @@ class OrgDate:
 
         hours = time.hour + duration_hours
         minutes = time.minute + duration_minutes
-        
+
         while minutes >= 60:
             hours += 1
             minutes -= 60
-            
+
         return datetime.time(hours, minutes)
-                                        
-        
+
+
+class TaskLink:
+
+    def __init__(self, link, title=None, tags=[]):
+        self.link = link
+        self.title = title
+        self.tags = tags
+
+    def __repr__(self):
+        return '{} {} {}'.format(self.link, self.title, self.tags)
+
+    def __str__(self):
+        if self.title or len(self.tags) > 0:
+            title = self.title or self.link
+            if len(self.tags) > 0:
+                title = '{} {}'.format(title, ' '.join('#' + tag for tag in self.tags))
+            return '[[{}][{}]]'.format(self.link, title)
+        else:
+            return self.link
+
+    def __eq__(self, another):
+        return (self.link == another.link and
+                self.title == another.title and
+                self.tags == another.tags)
+
+    @classmethod
+    def try_parse(self, line):
+        shortlink_match = shortlink_regex.match(line)
+        if shortlink_match:
+            return TaskLink(shortlink_match.group(1))
+
+        fulllink_match = fulllink_regex.match(line)
+        if fulllink_match:
+            title = fulllink_match.group(2)
+            tags = []
+
+            # Parse tags in end of line
+            while True:
+                tags_match = tags_regex.search(title)
+                if not tags_match:
+                    break
+                tags.append(tags_match.group(1))
+                title = title[:tags_match.start()]
+            tags.reverse()
+
+            return TaskLink(fulllink_match.group(1), title, tags)
+
+        return None
+
+
 class TasksTree(object):
     """
     Tree for holding tasks
@@ -142,19 +197,20 @@ class TasksTree(object):
         self.title = title
         self.subtasks = []
         self.notes = []
+        self.links = []
 
         self.todo = False
         self.completed = False
-        
+
         self.closed_time = None
         self.schedule_time = None
-        
+
     def __getitem__(self, key):
         return self.subtasks[key]
-         
+
     def __setitem__(self, key, val):
         self.subtasks[key] = val
-        
+
     def __delitem__(self, key):
         del(self.subtasks[key])
 
@@ -164,10 +220,10 @@ class TasksTree(object):
     def __len__(self):
         return len(self.subtasks)
 
-    def update(self, todo=None, completed=None, closed_time=None, schedule_time=None, notes=None):
+    def update(self, todo=None, completed=None, closed_time=None, schedule_time=None, notes=None, links=None):
         if todo is not None:
             self.todo = todo
-            
+
         if completed is not None:
             self.todo = True
             self.completed = completed
@@ -175,12 +231,15 @@ class TasksTree(object):
         if notes is not None:
             self.notes = notes
 
+        if links is not None:
+            self.links = links
+
         if closed_time is not None:
             self.closed_time = closed_time
 
         if schedule_time is not None:
             self.schedule_time = schedule_time
-        
+
         return self
 
     def add_subtask(self, title):
@@ -215,20 +274,24 @@ class TasksTree(object):
 
         real_notes = []
         for line in self.notes:
-            note_string = True
-            
-            matches = timeline_regex.findall(line)
-            for match in matches:                
-                if len(match[0]) > 0:
-                    note_string = False
-                    self.closed_time = OrgDate.parse_org_format(match[0])
+            timeline_matches = timeline_regex.findall(line)
 
-                if len(match[1]) > 0:
-                    note_string = False
-                    self.schedule_time = OrgDate.parse_org_format(match[1])
-                    
-            if note_string:
-                real_notes.append(line)
+            if len(timeline_matches) > 0:
+                for timeline_match in timeline_matches:
+                    if timeline_match[0]:
+                        self.closed_time = OrgDate.parse_org_format(timeline_match[0])
+
+                    if timeline_match[1]:
+                        self.schedule_time = OrgDate.parse_org_format(timeline_match[1])
+
+                continue
+
+            link = TaskLink.try_parse(line)
+            if link:
+                self.links.append(link)
+                continue
+
+            real_notes.append(line)
 
         while (len(real_notes) > 0) and (len(real_notes[0].strip()) == 0):
             real_notes.pop(0)
@@ -256,8 +319,15 @@ class TasksTree(object):
                 time_line.append("SCHEDULED: <{0}>".format(subtask.schedule_time.to_org_format()))
             if len(time_line) > 1:
                 res.append(' '.join(time_line))
+            subtask._append_links(res, level + 2)
             subtask._append_notes(res, level + 2)
             subtask._append_tree(res, level + 1)
+
+
+    def _append_links(self, res, padding):
+        for link in self.links:
+            link_line = ' ' * padding + str(link)
+            res.append(link_line)
 
 
     def _append_notes(self, res, padding):
@@ -292,7 +362,7 @@ class TasksTree(object):
         file_lines = codecs.open(path, "r", "utf-8").readlines()
         file_text = "".join(file_lines)
         return TasksTree.parse_text(file_text)
-    
+
     def parse_text(text):
         """Parses an org-mode formatted block of text and returns a tree"""
         # create a (read-only) file object containing *text*
