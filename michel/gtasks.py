@@ -126,7 +126,7 @@ class GtaskProvider:
                         gtask['due'] = self._to_google_date_format(task.schedule_time)
                     else:
                         gtask['due'] = None
-                if 'links' in item['changes'] > 0:
+                if 'links' in item['changes']:
                     gtask['links'] = GtaskProvider.convert_links(task.links)
 
                 if len(gtask) == 0:
